@@ -1,0 +1,207 @@
+"""대시보드: 지금 녹화 상태(크게), 앱, OBS Studio, OBS 연결, 유튜브 상태, 최근 영상 몇 개."""
+import datetime
+import time
+
+from PyQt6.QtCore import QEvent, QRectF, Qt
+from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPixmap
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+
+from ..i18n import tr
+from .art import cover
+from .style import C
+from .videos import RecordTable, ROW_H
+from .widgets import fmt_len, label
+
+HEAD_H = 36            # 표 머리줄 높이
+
+
+def _set(w, text=None, css=None):
+    """바뀔 때만 고친다(매초 다시 입히면 스타일 계산이 다시 돈다)."""
+    if text is not None and w.text() != text:
+        w.setText(text)
+    if css is not None and w.styleSheet() != css:
+        w.setStyleSheet(css)
+
+
+class Hero(QFrame):
+    """지금 상태 칸. 녹화 중이면 그 게임의 스팀 배경 그림을 깔고 빨간 표시."""
+
+    def __init__(self, art):
+        super().__init__()
+        self.setObjectName("hero")
+        self.art = art
+        self.setFixedHeight(176)
+        self.game = None
+        self._bg = None
+        # 왼쪽 위: 상태, 오른쪽 위: 녹화 시간 / 가운데: 게임 이름 / 왼쪽 아래: 시작 시각, 오른쪽 아래: 일시 정지
+        v = QVBoxLayout(self)
+        v.setContentsMargins(28, 22, 22, 20)
+        v.setSpacing(4)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        self.dot = QLabel()
+        self.dot.setFixedSize(10, 10)
+        top.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.state = label("", "herostate")
+        top.addWidget(self.state)
+        top.addStretch(1)
+        self.timer = label("", "herotime")
+        top.addWidget(self.timer, 0, Qt.AlignmentFlag.AlignVCenter)
+        v.addLayout(top)
+        v.addStretch(1)
+        self.big = label("", "herobig")
+        v.addWidget(self.big)
+        bottom = QHBoxLayout()
+        self.meta = label("", "herometa")
+        bottom.addWidget(self.meta, 1, Qt.AlignmentFlag.AlignBottom)
+        v.addLayout(bottom)
+
+    def set_game(self, game):
+        if game != self.game:
+            self.game = game
+            self._bg = None
+            self.update()
+
+    def _background(self):
+        if self._bg is not None and self._bg.size() == self.size():
+            return self._bg
+        files = self.art.game_files(self.game) if self.game else {}
+        src = QPixmap(files["hero"]) if files.get("hero") else None
+        pm = cover(src, self.width(), self.height()) if src is not None and not src.isNull() else None
+        self._bg = pm if pm is not None else QPixmap()
+        return self._bg
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        r = QRectF(self.rect())
+        bg = self._background() if self.game else None
+        if bg is not None and not bg.isNull():
+            p.drawPixmap(0, 0, bg)
+            g = QLinearGradient(0, 0, self.width(), 0)       # 글자가 읽히게 왼쪽을 바탕색으로 덮는다
+            base = QColor(C["bg"])
+            for pos, alpha in ((0, 235), (0.55, 175), (1, 70)):
+                c = QColor(base)
+                c.setAlpha(alpha)
+                g.setColorAt(pos, c)
+            p.fillRect(r, g)
+        else:
+            p.fillRect(r, QColor(C["surface"]))
+        p.setPen(QColor(C["rec"] if self.game else C["border"]))
+        p.drawRect(r.adjusted(0.5, 0.5, -0.5, -0.5))
+        p.end()
+
+
+class Tile(QFrame):
+    """작은 상태 칸: 이름 / 점과 값 / 한 줄 설명."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("tile")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(18, 14, 18, 14)
+        v.setSpacing(6)
+        self.name = label("", "tilename")
+        v.addWidget(self.name)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self.dot = QLabel()
+        self.dot.setFixedSize(8, 8)
+        row.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.value = label("", "tilevalue")
+        row.addWidget(self.value, 1)
+        v.addLayout(row)
+        self.note = label("", "tilenote")
+        v.addWidget(self.note)
+
+    def set(self, name, value, color, note):
+        _set(self.name, name)
+        _set(self.value, value, f"color: {color if color != C['ok'] else C['text']};")
+        _set(self.dot, css=f"background: {color};")
+        _set(self.note, note or " ")
+
+
+class DashboardPage(QWidget):
+    def __init__(self, svc, art, show_videos):
+        super().__init__()
+        self.svc = svc
+        self._sig = None
+        self.fit = 1                     # 창 높이에 들어가는 최근 영상 줄 수
+        v = QVBoxLayout(self)
+        v.setContentsMargins(32, 0, 32, 24)
+        v.setSpacing(16)
+        self.hero = Hero(art)
+        v.addWidget(self.hero)
+        tiles = QHBoxLayout()
+        tiles.setSpacing(12)
+        self.tiles = [Tile() for _ in range(4)]
+        for t in self.tiles:
+            tiles.addWidget(t, 1)
+        v.addLayout(tiles)
+        v.addSpacing(8)
+        head = QHBoxLayout()
+        head.addWidget(label(tr("dash.recent"), "h2"))
+        head.addStretch(1)
+        more = QPushButton(tr("dash.all"))
+        more.setObjectName("link")
+        more.setCursor(Qt.CursorShape.PointingHandCursor)
+        more.clicked.connect(show_videos)
+        head.addWidget(more)
+        v.addLayout(head)
+        self.recent = RecordTable(self, art)
+        t = self.recent.table
+        t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        t.setMinimumHeight(HEAD_H + ROW_H)
+        t.installEventFilter(self)       # 표 높이가 바뀌면 들어가는 줄 수만큼 다시 채운다(스크롤 없이)
+        v.addWidget(t, 1)
+        self.empty = label(tr("empty.title"), "muted")
+        self.empty.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        v.addWidget(self.empty, 1)
+
+    def eventFilter(self, obj, ev):
+        if obj is self.recent.table and ev.type() == QEvent.Type.Resize:
+            n = max(1, (obj.height() - HEAD_H - 2) // ROW_H)
+            if n != self.fit:
+                self.fit = n
+                self._sig = None
+                self.refresh()
+        return False
+
+    def refresh_status(self, rows, problem):
+        """창이 1초마다 부른다. rows, problem 은 window.health() 결과."""
+        self._last = (rows, problem)
+        svc, s, now = self.svc, self.svc.recorder.session, time.time()
+        h = self.hero
+        if s:
+            color, state, big = C["rec"], tr("state.recording"), s.game
+            meta = tr("dash.started").format(t=datetime.datetime.fromtimestamp(s.start).strftime("%H:%M"))
+            _set(h.timer, fmt_len(now - s.start))
+            h.set_game(s.game)
+        else:
+            _set(h.timer, "")
+            h.set_game(None)
+            if problem:
+                color, state, big, meta = C["neg"], tr("state.blocked"), problem[0], problem[1]
+            elif svc.paused:
+                color, state, big, meta = C["text2"], tr("state.paused"), tr("dash.paused.big"), ""
+            elif svc.recorder.external:
+                color, state, big, meta = C["text2"], tr("state.external"), tr("dash.external.big"), ""
+            else:
+                color, state, big, meta = C["ok"], tr("state.ready"), tr("dash.ready.big"), ""
+        _set(h.dot, css=f"background: {color};")
+        _set(h.state, state, f"color: {color};")
+        _set(h.big, big)
+        _set(h.meta, meta)
+        for tile, (name, value, c, note) in zip(self.tiles, rows):
+            tile.set(name, value, c, note)
+
+    def refresh(self):
+        store = self.svc.store
+        with store.lock:
+            recs = sorted(store.data["recordings"].values(), key=lambda r: r.get("added_at", ""), reverse=True)[:self.fit]
+        sig = [(r.get("path"), r.get("status"), r.get("cleaned_up")) for r in recs]
+        if sig == self._sig:
+            return
+        self._sig = sig
+        self.recent.fill(recs)
+        self.recent.table.setVisible(bool(recs))
+        self.empty.setVisible(not recs)
