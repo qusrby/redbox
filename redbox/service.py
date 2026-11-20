@@ -4,6 +4,7 @@ import datetime
 import os
 import threading
 import time
+import zlib
 
 from . import APP_ID, APP_NAME, VERSION, paths
 from .detect import Detector, win32
@@ -30,7 +31,9 @@ class Log:
 def single_instance():
     """이미 실행 중이면 None. 이름 있는 뮤텍스는 프로세스가 끝나면 윈도우가 알아서 푼다."""
     k32 = ctypes.windll.kernel32
-    h = k32.CreateMutexW(None, False, f"Local\\{APP_ID}")
+    home = os.environ.get("REDBOX_HOME")          # 개발용 데이터 폴더로 띄운 것은 따로 센다
+    name = f"Local\\{APP_ID}" + (f"-{zlib.crc32(os.path.normcase(home).encode()):08x}" if home else "")
+    h = k32.CreateMutexW(None, False, name)
     if k32.GetLastError() == 183:    # ERROR_ALREADY_EXISTS
         if h:
             k32.CloseHandle(h)

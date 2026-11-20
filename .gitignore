@@ -7,3 +7,4 @@ dist/
 *.tmp
 .venv/
 venv/
+packaging/redbox.ico

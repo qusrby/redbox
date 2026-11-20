@@ -2,8 +2,6 @@
 
 게임 실행을 감지해 OBS Studio 로 자동 녹화하고, 유튜브 비공개 업로드 뒤 PC 에서 정리
 
-> 개발 중입니다. 설치 파일은 아직 없습니다.
-
 ## 기능
 
 - 첫 실행 안내: 언어, OBS 연결(설치 확인, 웹소켓 자동 켜기, 연결 시험), 영상 폴더, 유튜브 연결(건너뛰기 가능), 윈도우 시작 시 실행. 안내를 마쳐야 녹화 시작
@@ -27,19 +25,40 @@
 - 게임 그림: 스팀 게임은 스팀이 PC 에 받아 둔 대표 그림, 직접 추가한 게임은 아이콘이나 사용자가 고른 그림. 보관해 두어 게임을 지워도 유지
 - 한국어, 영어(윈도우 언어를 따르고 설정에서 변경)
 - 윈도우를 켜면 트레이로 자동 시작(설정에서 끄기)
+- 새 버전 알림: 깃허브 Releases 에 새 버전이 나오면 트레이 알림과 설정 화면으로 알림(설치는 하지 않음, 설정에서 끄기)
 - 그림자 실행: 녹화 없이 감지 판정만 로그에 남겨 확인
 
 ## 동작 환경
 
-- Windows 10, 11
-- Python 3.11 이상
+- Windows 10, 11 (64비트)
 - OBS Studio 28 이상(웹소켓 서버는 첫 실행 안내에서 자동으로 켬)
+- 소스로 실행할 때는 Python 3.11 이상
 
 ## 설치
 
+1. [Releases](https://github.com/qusrby/redbox/releases/latest)에서 `Redbox-Setup-<버전>.exe` 를 내려받아 실행
+2. 관리자 권한 없이 `%LOCALAPPDATA%\Programs\Redbox` 에 설치되고 시작 메뉴에 등록됨
+3. 처음 켜면 첫 실행 안내가 뜸
+
+코드 서명을 하지 않은 설치 파일이라, 처음 실행할 때 윈도우의 'Windows의 PC 보호' 화면이 뜰 수 있습니다. **추가 정보**를 누르고 **실행**을 누르면 설치됩니다.
+
+제거는 윈도우 설정의 앱 목록에서 합니다. 설정과 녹화 기록(`%APPDATA%\Redbox`)과 영상 파일은 남습니다.
+
+### 소스로 실행
+
 ```bash
 pip install -r requirements.txt
+python -m redbox
 ```
+
+### 직접 빌드
+
+```bash
+pip install -r requirements.txt -r packaging/requirements-build.txt
+python packaging/build.py
+```
+
+`dist/Redbox/Redbox.exe`(폴더형 exe)와 `dist/Redbox-Setup-<버전>.exe`(설치 파일)가 만들어집니다. 설치 파일에는 [Inno Setup 6](https://jrsoftware.org/isinfo.php)이 필요하고, 없으면 exe 까지만 만듭니다.
 
 ## 유튜브 연결
 
@@ -102,3 +121,12 @@ python -m redbox run
 | `redbox/ui/frame.py` | 제목 표시줄 없는 창: 창 버튼, 이동과 크기 조절 |
 | `Redbox.pyw` | 콘솔 창 없이 실행하는 진입 파일 |
 | `docs/youtube-key.md` | 유튜브 키 만들기 안내 |
+| `redbox/updater.py` | 새 버전 확인(깃허브 Releases) |
+| `redbox/assets/fonts/` | Pretendard 글꼴(OFL) |
+| `packaging/build.py` | 아이콘, exe, 설치 파일 빌드 |
+| `packaging/make_icon.py` | 로고로 exe 아이콘 만들기 |
+| `packaging/redbox.iss` | Inno Setup 설치 파일 설정 |
+
+## 라이선스
+
+GPL v3(`LICENSE`). 함께 배포하는 구성 요소의 라이선스는 `THIRD_PARTY_LICENSES.md` 에 있습니다.

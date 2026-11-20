@@ -8,6 +8,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from .. import APP_NAME, config, i18n, startup
+from ..updater import UpdateChecker
 from ..i18n import tr
 from ..service import Service
 from .style import QSS, app_font, app_icon
@@ -37,10 +38,13 @@ class App:
         except OSError as e:
             self.svc.log(f"[오류] 윈도우 시작 시 실행 설정 실패: {e}")
         self.thread = threading.Thread(target=self.svc.run, daemon=True, name="service")
+        self.svc.updates = UpdateChecker(self.cfg)
+        self._told_version = None
         self.window = None
         self.setup = None
         self.tray = QSystemTrayIcon(app_icon(), self.qt)
         self.tray.activated.connect(self._tray_clicked)
+        self.tray.messageClicked.connect(self._open_release)
         self._recording = None
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
@@ -56,6 +60,7 @@ class App:
         self.tray.show()
         self.timer.start(1000)
         self.thread.start()
+        self.svc.updates.start()
         if show:
             self.window.show()
 
@@ -95,7 +100,17 @@ class App:
         self.window.raise_()
         self.window.activateWindow()
 
+    def _open_release(self):
+        new = self.svc.updates.new
+        if new:
+            from .widgets import open_target
+            open_target(new[1])
+
     def _tick(self):
+        new = self.svc.updates.new
+        if new and new[0] != self._told_version:      # 새 버전은 트레이 알림으로 한 번만
+            self._told_version = new[0]
+            self.tray.showMessage(APP_NAME, tr("update.tray").format(v=new[0]), app_icon(), 8000)
         rec = self.svc.recorder.session
         recording = bool(rec)
         if recording != self._recording:

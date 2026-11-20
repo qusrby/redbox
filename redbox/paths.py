@@ -2,10 +2,17 @@
 개발 중에는 REDBOX_HOME 환경 변수로 다른 폴더를 쓸 수 있다."""
 import ctypes
 import os
+import sys
 import uuid
 from ctypes import wintypes
 
 from . import APP_ID
+
+
+def resource(*parts):
+    """앱에 들어 있는 파일(글꼴 등). exe 로 묶으면 묶음 폴더 안, 아니면 저장소 폴더 기준."""
+    base = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
 
 
 def data_dir():

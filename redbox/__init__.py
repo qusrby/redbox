@@ -2,4 +2,4 @@
 
 APP_NAME = "Redbox"
 APP_ID = "Redbox"
-VERSION = "0.1.0"
+VERSION = "1.0.0"

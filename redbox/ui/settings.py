@@ -43,9 +43,13 @@ class SettingsPage(QScrollArea):
         boot = Check()
         boot.setChecked(bool(self.cfg.get("start_with_windows", True)))
         boot.toggled.connect(self._set_startup)
+        upd = Check()
+        upd.setChecked(bool(self.cfg.get("check_updates", True)))
+        upd.toggled.connect(self._set_updates)
         v.addLayout(section(tr("set.general"), [
             setting_row(tr("set.language"), "", lang),
-            setting_row(tr("set.startup"), "", boot)]))
+            setting_row(tr("set.startup"), "", boot),
+            setting_row(tr("set.updates"), "", upd)]))
 
         # 녹화
         self.folder_row = setting_row(tr("set.folder"), rec["video_root"],
@@ -92,8 +96,12 @@ class SettingsPage(QScrollArea):
         fl.setSpacing(8)
         fl.addWidget(button(tr("set.open.logs"), lambda: open_target(paths.log_dir())))
         fl.addWidget(button(tr("set.open.data"), lambda: open_target(paths.data_dir())))
-        v.addLayout(section(tr("set.about"), [
-            setting_row(f"{APP_NAME} {VERSION}", tr("app.tagline"), folders)]))
+        self.update_btn = button(tr("update.download"), self._open_update, primary=True)
+        self.update_btn.hide()
+        fl.addWidget(self.update_btn)
+        self.about_row = setting_row(f"{APP_NAME} {VERSION}", tr("app.tagline"), folders)
+        self.about_desc = self.about_row.findChild(QLabel, "rowdesc")
+        v.addLayout(section(tr("set.about"), [self.about_row]))
         v.addStretch(1)
 
     # -- 저장 -------------------------------------------------------------------------------------
@@ -110,6 +118,15 @@ class SettingsPage(QScrollArea):
         """오디오 설정은 다음 녹화부터 적용(녹화를 시작할 때 맞춘다)."""
         self.cfg["obs"][key] = val
         self._saved()
+
+    def _set_updates(self, on):
+        self.cfg["check_updates"] = bool(on)
+        self._saved()
+
+    def _open_update(self):
+        new = getattr(getattr(self.svc, "updates", None), "new", None)
+        if new:
+            open_target(new[1])
 
     def _set_startup(self, on):
         self.cfg["start_with_windows"] = bool(on)
@@ -178,6 +195,12 @@ class SettingsPage(QScrollArea):
         threading.Thread(target=work, daemon=True).start()
 
     def refresh(self):
+        new = getattr(getattr(self.svc, "updates", None), "new", None)
+        want = tr("update.new").format(v=new[0]) if new else tr("app.tagline")
+        if self.about_desc.text() != want:
+            self.about_desc.setText(want)
+        if self.update_btn.isHidden() == bool(new):
+            self.update_btn.setVisible(bool(new))
         if getattr(self, "_busy", False):
             return
         ok = self._signed_in()

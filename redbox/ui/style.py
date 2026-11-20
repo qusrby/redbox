@@ -140,8 +140,25 @@ QMenu::separator {{ height: 1px; background: {C['border2']}; margin: 4px 0; }}
 """
 
 
+_fonts_loaded = False
+
+
+def load_fonts():
+    """앱에 넣어 둔 Pretendard(Medium, SemiBold, Bold, ExtraBold)를 등록한다. 글꼴을 설치하지 않은 PC 에서도 같은 모양이 되게."""
+    global _fonts_loaded
+    if _fonts_loaded:
+        return
+    _fonts_loaded = True
+    import glob
+    from PyQt6.QtGui import QFontDatabase
+    from .. import paths
+    for f in glob.glob(paths.resource("redbox", "assets", "fonts", "*.otf")):
+        QFontDatabase.addApplicationFont(f)
+
+
 def app_font():
     """Pretendard Medium + 강한 힌팅. Regular 굵기에 기본 힌팅이면 작은 글자에서 '드' 같은 글자의 가로획이 사라진다."""
+    load_fonts()
     f = QFont("Pretendard", 10)
     f.setWeight(QFont.Weight.Medium)
     f.setHintingPreference(QFont.HintingPreference.PreferFullHinting)

@@ -11,6 +11,7 @@ DEFAULTS = {
     "setup_done": False,             # 첫 실행 안내를 마쳤는지(설정 파일이 이미 있던 사용자는 마친 것으로 본다)
     "language": "auto",              # auto(윈도우 언어), ko, en
     "start_with_windows": True,
+    "check_updates": True,           # 깃허브에 새 버전이 있으면 알린다(설치는 하지 않음)
     "notify": True,
     "recording": {
         "video_root": "",            # 비면 동영상\Redbox
