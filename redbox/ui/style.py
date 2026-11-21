@@ -106,6 +106,7 @@ QPushButton:disabled {{ color: {C['muted']}; border-color: {C['border']}; }}
 QPushButton#primary {{ background: {C['accent']}; border-color: {C['accent']}; color: {C['on_accent']}; font-weight: 700; }}
 QPushButton#primary:hover {{ background: {C['accent_hover']}; color: {C['on_accent']}; }}
 QPushButton#primary:pressed {{ background: {C['accent']}; border-color: {C['text']}; color: {C['on_accent']}; }}
+QPushButton#primary:disabled {{ background: {C['surface2']}; border-color: {C['border2']}; color: {C['text2']}; font-weight: 600; }}
 QTableWidget QPushButton {{ padding: 2px 10px; }}
 QPushButton#iconbtn {{ padding: 0; }}
 QPushButton#seg {{ padding: 0 12px; background: {C['surface2']}; border: 1px solid {C['border2']}; color: {C['text2']}; }}

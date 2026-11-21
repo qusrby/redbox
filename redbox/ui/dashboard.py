@@ -8,12 +8,13 @@ from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPixmap
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ..i18n import tr
+from ..recorder import obs as obsmod
 from ..uploader import youtube
 from . import icons
 from .art import cover
 from .style import C
 from .videos import RecordTable, ROW_H, upload_progress, uploading_rec
-from .widgets import Dot, ElideLabel, fmt_elapsed, fmt_time, label, open_target, rec_time, tabular
+from .widgets import Dot, ElideLabel, button, fmt_elapsed, fmt_time, label, open_target, rec_time, tabular
 
 HEAD_H = 36            # 표 머리줄 높이
 
@@ -36,7 +37,7 @@ class Hero(QFrame):
         self.setFixedHeight(176)
         self.game = None
         self._bg = None
-        # 왼쪽 위: 상태, 오른쪽 위: 녹화 시간 / 가운데: 게임 이름 / 왼쪽 아래: 시작 시각, 오른쪽 아래: 일시 정지
+        # 왼쪽 위: 상태, 오른쪽 위: 녹화 시간 / 가운데: 게임 이름 / 왼쪽 아래: 시작 시각, 오른쪽 아래: OBS Studio 실행
         v = QVBoxLayout(self)
         v.setContentsMargins(28, 22, 22, 20)
         v.setSpacing(4)
@@ -60,6 +61,9 @@ class Hero(QFrame):
         bottom = QHBoxLayout()
         self.meta = label("", "herometa")
         bottom.addWidget(self.meta, 1, Qt.AlignmentFlag.AlignBottom)
+        self.action = button("", primary=True)        # OBS Studio 가 꺼져 있을 때만
+        self.action.hide()
+        bottom.addWidget(self.action, 0, Qt.AlignmentFlag.AlignBottom)
         v.addLayout(bottom)
 
     def set_game(self, game):
@@ -168,6 +172,9 @@ class DashboardPage(QWidget):
         tiles = QHBoxLayout()
         tiles.setSpacing(12)
         self.tiles = [Tile() for _ in range(4)]
+        self._obs_exe = obsmod.find_obs()
+        self._obs_launch = 0.0           # OBS Studio 실행 버튼을 누른 시각(켜질 때까지 버튼을 잠근다)
+        self.hero.action.clicked.connect(self._run_obs)
         for t in self.tiles:
             tiles.addWidget(t, 1)
         v.addLayout(tiles)
@@ -213,6 +220,35 @@ class DashboardPage(QWidget):
             open_target(youtube.studio_url(found))
         threading.Thread(target=work, daemon=True, name="studio").start()
 
+    def _run_obs(self):
+        """OBS Studio 를 켠다(첫 실행 안내와 같은 방식, 트레이로). 설치돼 있지 않으면 받는 곳을 연다."""
+        self._obs_exe = obsmod.find_obs()
+        if not self._obs_exe:
+            open_target(obsmod.OBS_DOWNLOAD)
+            return
+        try:
+            obsmod.launch_obs(self._obs_exe)
+        except OSError as e:
+            self.svc.log(f"OBS Studio 실행 실패: {e}")
+            return
+        self.svc.log("대시보드에서 OBS Studio 실행")
+        self._obs_launch = time.time()
+        if getattr(self, "_last", None):
+            self.refresh_status(*self._last)
+
+    def _obs_action(self):
+        """녹화 중이 아니고 OBS Studio 가 꺼져 있을 때만 큰 칸에 실행 버튼. 누른 뒤 20초 동안은 켜는 중으로 잠근다."""
+        b = self.hero.action
+        if self.svc.obs_pid or self.svc.recorder.session:
+            self._obs_launch = 0.0
+            b.hide()
+            return
+        starting = time.time() - self._obs_launch < 20
+        _set(b, tr("dash.obs.starting") if starting else tr("dash.obs.run") if self._obs_exe else tr("dash.obs.get"))
+        if b.isEnabled() == starting:
+            b.setEnabled(not starting)
+        b.show()
+
     def eventFilter(self, obj, ev):
         if obj is self.recent.table and ev.type() == QEvent.Type.Resize:
             n = max(1, (obj.height() - HEAD_H - 2) // ROW_H)
@@ -244,6 +280,7 @@ class DashboardPage(QWidget):
                 color, state, big, meta = C["text2"], tr("state.external"), tr("dash.external.big"), ""
             else:
                 color, state, big, meta = C["ok"], tr("state.ready"), tr("dash.ready.big"), ""
+        self._obs_action()
         h.dot.set_color(color)
         _set(h.state, state, f"color: {color};")
         _set(h.big, big)
