@@ -107,6 +107,7 @@ T = {
     "col.upload": ("업로드", "Upload"),
     "col.original": ("원본", "Original"),
     "up.st.waiting": ("업로드 대기", "Waiting"),
+    "up.st.busy": ("업로드 중", "Uploading"),
     "up.st.done": ("업로드 완료", "Uploaded"),
     "up.st.skipped": ("업로드 제외", "Skipped"),
     "orig.kept": ("원본 보관 중", "Original kept"),

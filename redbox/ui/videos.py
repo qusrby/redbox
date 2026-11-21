@@ -24,13 +24,21 @@ ART_GAP = 14                             # 그림과 게임 이름 사이
 ROW_H = LIST_ART_H + 18
 
 
-def upload_state(r):
-    """(문구, 색, 아이콘) 업로드 진행."""
+def uploading_rec(store):
+    """지금 올리고 있는 기록(저장소의 그 dict). 없으면 None."""
+    info = store.data.get("in_progress")
+    return store.data["recordings"].get(info.get("key")) if info else None
+
+
+def upload_state(r, busy=False):
+    """(문구, 색, 아이콘) 업로드 진행. busy 는 지금 올리고 있는 기록."""
     st = r.get("status")
     if st == "uploaded":
         return tr("up.st.done"), C["ok"], "youtube"          # 초록
     if st == "waiting":
-        return tr("up.st.waiting"), C["accent"], "upload"
+        if busy:
+            return tr("up.st.busy"), C["accent"], "upload"   # 파랑
+        return tr("up.st.waiting"), C["text2"], None
     if st in ("excluded", "auto_deleted"):
         return tr("up.st.skipped"), C["warn"], None          # 노랑
     return tr("step.none"), C["muted"], None
@@ -105,7 +113,7 @@ class RecordTable(QObject):
             return max([fm.horizontalAdvance(tr(k)) for k in keys] + [fm.horizontalAdvance(tr(head))]) + 44
         t = self.table = table([tr("col.game"), tr("col.when"), tr("col.length"), tr("col.upload"), tr("col.original")], 0,
                                {1: fm.horizontalAdvance("2026-00-00 00:00") + 48, 2: fm.horizontalAdvance(fmt_len(36000 + 3599)) + 44,
-                                3: widest(("up.st.waiting", "up.st.done", "up.st.skipped"), "col.upload"),
+                                3: widest(("up.st.waiting", "up.st.busy", "up.st.done", "up.st.skipped"), "col.upload"),
                                 4: widest(("orig.kept", "orig.cleaned", "orig.deleted", "orig.missing"), "col.original")})
         t.setIconSize(QSize(LIST_ART_W + ART_GAP, LIST_ART_H))      # 게임 칸 앞의 작은 게임 그림(+ 여백)
         t.verticalHeader().setDefaultSectionSize(ROW_H)
@@ -161,8 +169,9 @@ class RecordTable(QObject):
         t.setRowCount(0)
         t.setRowCount(len(recs))
         self.rows = recs
+        cur = uploading_rec(self.parent_widget.svc.store)
         for i, r in enumerate(recs):
-            up_txt, up_col, _ic = upload_state(r)
+            up_txt, up_col, _ic = upload_state(r, r is cur)
             og_txt, og_col = original_state(r)
             vals = [(r.get("game", ""), C["text"]), (fmt_time(rec_time(r)), C["text2"]),
                     (fmt_len(rec_len(r)), C["text2"]), (up_txt, up_col), (og_txt, og_col)]
@@ -178,9 +187,9 @@ class RecordTable(QObject):
 class Card(QWidget):
     """녹화 하나. live 면 지금 녹화 중인 카드(빨간 테두리, 경과 시간)."""
 
-    def __init__(self, art, key, rec=None, live=None):
+    def __init__(self, art, key, rec=None, live=None, busy=False):
         super().__init__()
-        self.art, self.key, self.rec, self.live = art, key, rec, live
+        self.art, self.key, self.rec, self.live, self.busy = art, key, rec, live, busy
         self.orig = original_state(rec) if rec else None      # 그릴 때마다 파일을 확인하지 않게 만들 때 한 번
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setCursor(Qt.CursorShape.PointingHandCursor if rec else Qt.CursorShape.ArrowCursor)
@@ -238,7 +247,7 @@ class Card(QWidget):
             p.drawRect(QRectF(1, 1, w - 2, th - 2))
         else:
             r = self.rec
-            text, color, ic = upload_state(r)
+            text, color, ic = upload_state(r, self.busy)
             if ic == "youtube":
                 self._chip(p, 10, 10, text, QColor("#ffffff"), dark, "youtube", "#ff4e45")
             elif ic == "upload":
@@ -507,7 +516,8 @@ class VideosPage(QWidget):
             shown.append((k, r))
         show_live = live is not None and self.filter == "all" and (
             not self.query or self.query in (live.game or "").lower())
-        sig = (self.filter, self.query, self.view, id(live) if show_live else None,
+        cur = uploading_rec(store)
+        sig = (self.filter, self.query, self.view, id(live) if show_live else None, id(cur) if cur else None,
                [(k, r.get("status"), r.get("cleaned_up"), has_original(r)) for k, r in shown])
         if sig == self._sig:
             return
@@ -555,7 +565,7 @@ class VideosPage(QWidget):
                 self.live_card = Card(self.art, "", live=live)
                 items.append(("card", self.live_card))
             for k, r in recs:
-                c = Card(self.art, k, rec=r)
+                c = Card(self.art, k, rec=r, busy=r is uploading_rec(self.svc.store))
                 self.cards[k] = c
                 items.append(("card", c))
         self.grid.set_items(items)

@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidg
 from ..i18n import tr
 from .art import cover
 from .style import C
-from .videos import RecordTable, ROW_H
+from .videos import RecordTable, ROW_H, uploading_rec
 from .widgets import Dot, fmt_len, fmt_time, label
 
 HEAD_H = 36            # 표 머리줄 높이
@@ -197,7 +197,8 @@ class DashboardPage(QWidget):
         store = self.svc.store
         with store.lock:
             recs = sorted(store.data["recordings"].values(), key=lambda r: r.get("added_at", ""), reverse=True)[:self.fit]
-        sig = [(r.get("path"), r.get("status"), r.get("cleaned_up")) for r in recs]
+        cur = uploading_rec(store)
+        sig = [(r.get("path"), r.get("status"), r.get("cleaned_up"), r is cur) for r in recs]
         if sig == self._sig:
             return
         self._sig = sig
