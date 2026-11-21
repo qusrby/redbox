@@ -68,7 +68,7 @@ class App:
         self.thread.start()
         self.svc.updates.start()
         if show:
-            self.window.show()
+            self.window.present()
 
     def _build(self):
         """창과 트레이 메뉴."""
@@ -102,7 +102,7 @@ class App:
             self.show()
 
     def show(self):
-        self.window.show()
+        self.window.present()
         self.window.raise_()
         self.window.activateWindow()
 

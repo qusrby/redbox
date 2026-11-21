@@ -3,6 +3,7 @@
 import time
 
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QCursor, QGuiApplication
 from PyQt6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout, QWidget
 
 from .. import APP_NAME
@@ -93,6 +94,9 @@ class Banner(QFrame):
 
 
 # -- 메인 창 ---------------------------------------------------------------------------------------
+DEFAULT_SIZE = (1280, 800)
+
+
 class MainWindow(QWidget):
     PAGES = (("nav.dashboard", "dashboard"), ("nav.videos", "video"), ("nav.games", "games"),
              ("nav.settings", "settings"))
@@ -107,8 +111,9 @@ class MainWindow(QWidget):
         frame.refresh(int(self.winId()))          # 윈도우 기본 제목 표시줄을 없앤다(창 끌기, 크기 조절은 윈도우가 그대로)
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(app_icon())
-        self.resize(1180, 760)
+        self.resize(*DEFAULT_SIZE)
         self.setMinimumSize(920, 600)
+        self._placed = False
 
         body = QHBoxLayout(self)
         body.setContentsMargins(*[frame.BORDER] * 4)      # 둘레 선 자리
@@ -206,6 +211,17 @@ class MainWindow(QWidget):
         self.timer.timeout.connect(self.refresh)
         self.timer.start(1000)
         self.refresh()
+
+    def present(self):
+        """창을 보인다. 처음 보일 때는 기본 크기로 마우스가 있는 화면 가운데에 놓는다.
+        숨긴 채(윈도우 시작 시 트레이로) 만든 창은 나중에 보일 때 만들 때 준 크기를 잃고 아주 작게 뜨기 때문."""
+        if not self._placed:
+            self._placed = True
+            scr = QGuiApplication.screenAt(QCursor.pos()) or self.screen()
+            a = scr.availableGeometry()
+            w, h = min(DEFAULT_SIZE[0], a.width()), min(DEFAULT_SIZE[1], a.height())
+            self.setGeometry(a.x() + (a.width() - w) // 2, a.y() + (a.height() - h) // 2, w, h)
+        self.show()
 
     def _art_updated(self):
         """게임 그림을 새로 모았으면 목록과 카드를 새 그림으로 다시 그린다."""
