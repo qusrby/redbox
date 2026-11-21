@@ -13,6 +13,7 @@ from ..updater import UpdateChecker
 from ..i18n import tr
 from ..service import Service
 from .style import QSS, app_font, app_icon
+from .taskbar import Taskbar
 from .setup import SetupWindow
 from .window import MainWindow, RestartDialog
 
@@ -48,6 +49,9 @@ class App:
         self.tray.activated.connect(self._tray_clicked)
         self.tray.messageClicked.connect(self._open_release)
         self._recording = None
+        self.taskbar = Taskbar()
+        self._overlay = None        # 작업표시줄 단추에 마지막으로 붙인 녹화 표시(창이 숨으면 None)
+        self._overlay_tries = 0
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
         if self.cfg.get("setup_done"):
@@ -118,9 +122,24 @@ class App:
         if recording != self._recording:
             self._recording = recording
             self.tray.setIcon(app_icon(recording))
+        self._update_overlay(recording)
         tip = f"{APP_NAME}: " + (f"{tr('state.recording')} {rec.game}" if rec else
                                  tr("state.paused") if self.svc.paused else tr("state.idle"))
         self.tray.setToolTip(tip)
+
+    def _update_overlay(self, recording):
+        """작업표시줄 단추의 빨간 점. 창이 숨었다 다시 뜨면 단추가 새로 생기므로, 뜬 뒤 몇 초 동안은 다시 붙인다."""
+        w = self.window
+        if w is None or not w.isVisible():
+            self._overlay, self._overlay_tries = None, 0
+            return
+        if recording != self._overlay:
+            self._overlay_tries = 0
+        if self._overlay_tries >= 3:
+            return
+        if self.taskbar.set_recording(int(w.winId()), recording, tr("state.recording")):
+            self._overlay = recording
+            self._overlay_tries += 1
 
     def quit(self):
         self.svc.stop_event.set()
