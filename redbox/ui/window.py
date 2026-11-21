@@ -111,7 +111,8 @@ class MainWindow(QWidget):
         self.setMinimumSize(920, 600)
 
         body = QHBoxLayout(self)
-        body.setContentsMargins(0, 0, 0, 0)
+        body.setContentsMargins(*[frame.BORDER] * 4)      # 둘레 선 자리
+        self.body = body
         body.setSpacing(0)
 
         # 왼쪽: 이름, 메뉴, 한 줄 상태
@@ -261,6 +262,13 @@ class MainWindow(QWidget):
         btn = getattr(self, "max_btn", None)    # 창을 만드는 도중에도 불린다(PyQt6 는 여기서 오류가 나면 앱을 끈다)
         if btn is not None:
             btn.set_restore(self.isMaximized())
+        body = getattr(self, "body", None)
+        if body is not None:
+            body.setContentsMargins(*[frame.border_margin(self)] * 4)
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        frame.draw_border(self)
 
     def showEvent(self, e):
         super().showEvent(e)

@@ -33,6 +33,23 @@ def square_corners(hwnd):
         pass
 
 
+BORDER = 1     # 창 둘레 회색 선(어두운 배경 위에서도 창 경계가 보이게). 최대화하면 없앤다
+
+
+def border_margin(win):
+    return 0 if win.isMaximized() else BORDER
+
+
+def draw_border(win):
+    """창 둘레 선. 바깥 레이아웃을 BORDER 만큼 안으로 들여 두면 그 자리에 보인다."""
+    if win.isMaximized():
+        return
+    p = QPainter(win)
+    p.setPen(QPen(QColor(C["border2"]), 1))
+    p.drawRect(0, 0, win.width() - 1, win.height() - 1)
+    p.end()
+
+
 def handle(msg_ptr, win):
     """처리했으면 돌려줄 값, 아니면 None."""
     msg = wintypes.MSG.from_address(msg_ptr)

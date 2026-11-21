@@ -121,7 +121,7 @@ class SetupWindow(QWidget):
         self.resize(960, 640)
         self.setMinimumSize(880, 600)
         self.outer = QHBoxLayout(self)
-        self.outer.setContentsMargins(0, 0, 0, 0)
+        self.outer.setContentsMargins(*[frame.BORDER] * 4)      # 둘레 선 자리
         self.outer.setSpacing(0)
         self.body = None
         self._build()
@@ -492,6 +492,10 @@ class SetupWindow(QWidget):
     def showEvent(self, e):
         super().showEvent(e)
         frame.square_corners(int(self.winId()))
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        frame.draw_border(self)
 
     def nativeEvent(self, event_type, message):
         if bytes(event_type) == b"windows_generic_MSG":
