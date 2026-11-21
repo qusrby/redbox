@@ -15,6 +15,7 @@ from . import icons
 from .style import C
 
 ROW_H = 40
+GAUGE = Qt.ItemDataRole.UserRole + 1     # 표 칸의 진행률(0~1). 있으면 글자 아래에 게이지를 그린다
 CONTROL_H = 34        # 버튼, 드롭다운, 숫자 칸, 검색 칸, 버튼 묶음의 높이(어디서나 같게)
 SETTING_ROW_H = 66    # 설정 한 줄의 높이(설명이 있든 없든 같게)
 
@@ -238,6 +239,13 @@ class RowHover(QObject):
                 if idx.row() == hover.row:
                     p.fillRect(opt.rect, QColor(C["row_hover"]))
                 super().paint(p, opt, idx)
+                g = idx.data(GAUGE)
+                if g is not None:
+                    r = QRectF(opt.rect).adjusted(12, 0, -16, 0)
+                    bar = QRectF(r.left(), r.center().y() + 15, r.width(), 3)
+                    p.fillRect(bar, QColor(C["border"]))
+                    p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, g)), bar.height()),
+                               QColor(C["accent"]))
                 if idx.row() == hover.row and idx.column() == 0 and hover.overlay:
                     o = QStyleOptionViewItem(opt)
                     self.initStyleOption(o, idx)

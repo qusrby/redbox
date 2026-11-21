@@ -200,6 +200,7 @@ class DashboardPage(QWidget):
         cur = uploading_rec(store)
         sig = [(r.get("path"), r.get("status"), r.get("cleaned_up"), r is cur) for r in recs]
         if sig == self._sig:
+            self.recent.update_progress()
             return
         self._sig = sig
         self.recent.fill(recs)

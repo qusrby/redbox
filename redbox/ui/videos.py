@@ -13,7 +13,7 @@ from ..i18n import tr
 from . import icons
 from .art import CARD_H, CARD_W
 from .style import C
-from .widgets import (IconButton, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
+from .widgets import (GAUGE, IconButton, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
                       rec_len, rec_time, table)
 
 GAP = 18
@@ -30,14 +30,20 @@ def uploading_rec(store):
     return store.data["recordings"].get(info.get("key")) if info else None
 
 
-def upload_state(r, busy=False):
+def upload_progress(svc, cur):
+    """지금 올리는 기록의 진행률(0~1). 첫 조각을 올리기 전이면 0."""
+    pr = svc.uploader.progress
+    return pr[1] if pr and cur is not None and pr[0] == cur.get("name") else 0.0
+
+
+def upload_state(r, busy=False, progress=0.0):
     """(문구, 색, 아이콘) 업로드 진행. busy 는 지금 올리고 있는 기록."""
     st = r.get("status")
     if st == "uploaded":
         return tr("up.st.done"), C["ok"], "youtube"          # 초록
     if st == "waiting":
         if busy:
-            return tr("up.st.busy"), C["accent"], "upload"   # 파랑
+            return f"{tr('up.st.busy')} {int(progress * 100)}%", C["accent"], "upload"   # 파랑
         return tr("up.st.waiting"), C["text2"], None
     if st in ("excluded", "auto_deleted"):
         return tr("up.st.skipped"), C["warn"], None          # 노랑
@@ -107,13 +113,15 @@ class RecordTable(QObject):
         super().__init__(parent)
         self.parent_widget, self.art = parent, art
         self.rows, self.icons = [], {}
+        self.busy_row, self.pct = -1, None       # 올리고 있는 줄, 마지막으로 쓴 진행률(%)
         fm = parent.fontMetrics()
 
         def widest(keys, head):
             return max([fm.horizontalAdvance(tr(k)) for k in keys] + [fm.horizontalAdvance(tr(head))]) + 44
         t = self.table = table([tr("col.game"), tr("col.when"), tr("col.length"), tr("col.upload"), tr("col.original")], 0,
                                {1: fm.horizontalAdvance("2026-00-00 00:00") + 48, 2: fm.horizontalAdvance(fmt_len(36000 + 3599)) + 44,
-                                3: widest(("up.st.waiting", "up.st.busy", "up.st.done", "up.st.skipped"), "col.upload"),
+                                3: max(widest(("up.st.waiting", "up.st.done", "up.st.skipped"), "col.upload"),
+                                       fm.horizontalAdvance(tr("up.st.busy") + " 100%") + 44),
                                 4: widest(("orig.kept", "orig.cleaned", "orig.deleted", "orig.missing"), "col.original")})
         t.setIconSize(QSize(LIST_ART_W + ART_GAP, LIST_ART_H))      # 게임 칸 앞의 작은 게임 그림(+ 여백)
         t.verticalHeader().setDefaultSectionSize(ROW_H)
@@ -169,9 +177,13 @@ class RecordTable(QObject):
         t.setRowCount(0)
         t.setRowCount(len(recs))
         self.rows = recs
-        cur = uploading_rec(self.parent_widget.svc.store)
+        svc = self.parent_widget.svc
+        cur = uploading_rec(svc.store)
+        self.busy_row, self.pct = -1, None
         for i, r in enumerate(recs):
-            up_txt, up_col, _ic = upload_state(r, r is cur)
+            if r is cur:
+                self.busy_row = i
+            up_txt, up_col, _ic = upload_state(r, r is cur, upload_progress(svc, cur))
             og_txt, og_col = original_state(r)
             vals = [(r.get("game", ""), C["text"]), (fmt_time(rec_time(r)), C["text2"]),
                     (fmt_len(rec_len(r)), C["text2"]), (up_txt, up_col), (og_txt, og_col)]
@@ -181,6 +193,20 @@ class RecordTable(QObject):
                 if c == 0:
                     it.setIcon(self._icon(r.get("game", "")))
                 t.setItem(i, c, it)
+        self.update_progress()
+
+    def update_progress(self):
+        """올리고 있는 줄의 글자와 게이지만 고친다(표 전체를 다시 채우지 않고 1초마다)."""
+        it = self.table.item(self.busy_row, 3) if self.busy_row >= 0 else None
+        if it is None:
+            return
+        svc = self.parent_widget.svc
+        p = upload_progress(svc, uploading_rec(svc.store))
+        pct = int(p * 100)
+        if pct != self.pct:
+            self.pct = pct
+            it.setText(f"{tr('up.st.busy')} {pct}%")
+            it.setData(GAUGE, p)
 
 
 # -- 카드 -----------------------------------------------------------------------------------------
@@ -190,6 +216,7 @@ class Card(QWidget):
     def __init__(self, art, key, rec=None, live=None, busy=False):
         super().__init__()
         self.art, self.key, self.rec, self.live, self.busy = art, key, rec, live, busy
+        self.progress = 0.0
         self.orig = original_state(rec) if rec else None      # 그릴 때마다 파일을 확인하지 않게 만들 때 한 번
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setCursor(Qt.CursorShape.PointingHandCursor if rec else Qt.CursorShape.ArrowCursor)
@@ -247,7 +274,7 @@ class Card(QWidget):
             p.drawRect(QRectF(1, 1, w - 2, th - 2))
         else:
             r = self.rec
-            text, color, ic = upload_state(r, self.busy)
+            text, color, ic = upload_state(r, self.busy, self.progress)
             if ic == "youtube":
                 self._chip(p, 10, 10, text, QColor("#ffffff"), dark, "youtube", "#ff4e45")
             elif ic == "upload":
@@ -257,6 +284,9 @@ class Card(QWidget):
             n = rec_len(r)
             if n:
                 self._chip(p, w - 10, th - 32, fmt_len(n), QColor("#ffffff"), dark, right=True)
+            if self.busy:                  # 그림 아래 끝에 업로드 게이지
+                p.fillRect(QRectF(0, th - 4, w, 4), QColor(0, 0, 0, 160))
+                p.fillRect(QRectF(0, th - 4, w * max(0.0, min(1.0, self.progress)), 4), QColor(C["accent"]))
             if hover:
                 p.fillRect(QRectF(0, 0, w, th), QColor(0, 0, 0, 70))
                 d = 48
@@ -457,7 +487,7 @@ class VideosPage(QWidget):
         self._apply_view_buttons()
 
         self.tick = QTimer(self)              # 녹화 중 카드의 경과 시간
-        self.tick.timeout.connect(lambda: self.live_card and self.live_card.update())
+        self.tick.timeout.connect(self._tick)
         self.tick.start(1000)
 
     # -- 조작 -------------------------------------------------------------------------------------
@@ -494,6 +524,18 @@ class VideosPage(QWidget):
         if st in ("excluded", "auto_deleted", "missing"):
             return "skipped"
         return ""
+
+    def _tick(self):
+        """1초마다: 녹화 중 카드의 경과 시간, 업로드 중 영상의 진행률."""
+        if self.live_card:
+            self.live_card.update()
+        cur = uploading_rec(self.svc.store)
+        p = upload_progress(self.svc, cur)
+        for c in self.cards.values():
+            if c.busy and c.progress != p:
+                c.progress = p
+                c.update()
+        self.list.update_progress()
 
     def refresh(self):
         if self.grid_area._smooth.anim.running() or self.table._smooth.anim.running():
@@ -545,6 +587,7 @@ class VideosPage(QWidget):
     def _fill_grid(self, shown, live):
         items, self.cards, self.live_card = [], {}, None
         today = datetime.date.today()
+        cur = uploading_rec(self.svc.store)
         groups = []
         for k, r in shown:
             dt = rec_time(r)
@@ -565,7 +608,9 @@ class VideosPage(QWidget):
                 self.live_card = Card(self.art, "", live=live)
                 items.append(("card", self.live_card))
             for k, r in recs:
-                c = Card(self.art, k, rec=r, busy=r is uploading_rec(self.svc.store))
+                c = Card(self.art, k, rec=r, busy=r is cur)
+                if c.busy:
+                    c.progress = upload_progress(self.svc, cur)
                 self.cards[k] = c
                 items.append(("card", c))
         self.grid.set_items(items)
