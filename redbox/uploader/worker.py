@@ -184,15 +184,95 @@ class Uploader(threading.Thread):
                 except OSError as e:
                     self.log(f"  [오류] 짧은 영상 삭제 실패: {e}")
                     continue
-                self.store.update(key, status="auto_deleted", reason="too_short_deleted")
+                self.store.update(key, status="auto_deleted", reason="too_short_deleted", rule_at=[mn, dl])
                 self.log(f"  [삭제] {dur / 60:.1f}분 (기준 {dl / 60:g}분 이하) -> 너무 짧아서 자동 삭제: {rec['name']}")
             elif not upload_on:
                 continue           # 업로드 판단은 업로드를 켤 때 한다
             elif mn > 0 and dur < mn:
-                self.store.update(key, status="excluded", reason="too_short")
+                self.store.update(key, status="excluded", reason="too_short", rule_at=[mn, dl])
                 self.log(f"  [제외] {dur / 60:.1f}분 (기준 {mn / 60:g}분 미만) -> 업로드 안 함: {rec['name']}")
             else:
-                self.store.update(key, checked=True)
+                self.store.update(key, checked=True, rule_at=[mn, dl])
+
+    # -- 2-1. 바뀐 길이 규칙 ------------------------------------------------------------------------
+    # 길이 규칙은 녹화가 끝날 때 한 번 판정한다. 나중에 설정을 바꿔도 이미 판정한 영상은 저절로 바꾸지 않고,
+    # 화면에서 영상마다 경고를 띄우고, 확인 창에서 적용해야 바뀐다(취소하면 경고는 남는다).
+    def rule_change(self, rec):
+        """지금 규칙으로는 판정이 달라지는 기록이면 'upload', 'exclude', 'delete'. 아니면 None."""
+        st = rec.get("status")
+        if st == "excluded":
+            if rec.get("reason") != "too_short":
+                return None
+            old = "exclude"
+        elif st == "waiting" and rec.get("checked"):
+            old = "upload"
+        else:
+            return None
+        path = rec.get("path") or ""
+        info = self.store.data.get("in_progress") or {}
+        if info.get("key") == file_key(path) or not os.path.exists(path):
+            return None
+        mn, dl, _keep = self.rules_for(rec.get("game"))
+        dur = rec.get("duration") or 0
+        if dl > 0 and dur <= dl:
+            new = "delete"
+        elif not self.up.get("enabled"):
+            return None                    # 업로드를 꺼 두었으면 올릴지 말지는 판정하지 않는다
+        elif mn > 0 and dur < mn:
+            new = "exclude"
+        else:
+            new = "upload"
+        return new if new != old else None
+
+    def apply_rule_change(self, key):
+        """바뀐 규칙을 이 기록에 적용한다. 적용한 결과('upload', 'exclude', 'delete')나 None."""
+        with self._rules_lock:
+            rec = self.store.data["recordings"].get(key)
+            act = self.rule_change(rec) if rec else None
+            if act is None:
+                return None
+            name, dur = rec.get("name", ""), (rec.get("duration") or 0) / 60
+            mn, dl, _keep = self.rules_for(rec.get("game"))
+            if act == "delete":
+                try:
+                    media.force_remove(rec.get("path") or key)
+                except OSError as e:
+                    self.log(f"  [오류] 바뀐 규칙으로 삭제 실패: {e}")
+                    return None
+                self.store.update(key, status="auto_deleted", reason="too_short_deleted", rule_at=[mn, dl])
+                self.log(f"  [바뀐 규칙 적용] {dur:.1f}분 -> 원본 삭제: {name}")
+            elif act == "exclude":
+                self.store.update(key, status="excluded", reason="too_short", rule_at=[mn, dl])
+                self.log(f"  [바뀐 규칙 적용] {dur:.1f}분 -> 업로드 안 함: {name}")
+            else:
+                self.store.update(key, status="waiting", reason=None, checked=True, rule_at=[mn, dl])
+                self.log(f"  [바뀐 규칙 적용] {dur:.1f}분 -> 업로드 대기: {name}")
+        self.nudge()
+        return act
+
+    def delete_original(self, key):
+        """검토 창에서 사용자가 고른 원본 삭제. 올리지 않고 지운 것으로 남긴다(업로드 대기에서 빠진다)."""
+        with self._rules_lock:
+            rec = self.store.data["recordings"].get(key)
+            info = self.store.data.get("in_progress") or {}
+            if not rec or info.get("key") == key:
+                return False
+            try:
+                media.force_remove(rec.get("path") or key)
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                self.log(f"  [오류] 원본 삭제 실패: {e}")
+                return False
+            self.store.update(key, status="auto_deleted", reason="user_deleted")
+            self.log(f"  [삭제] 검토 창에서 원본 삭제: {rec.get('name', '')}")
+        return True
+
+    def rules_signature(self):
+        """화면이 다시 그릴지 정할 때 쓰는 길이 규칙 값."""
+        up = self.up
+        return (bool(up.get("enabled")), up.get("min_minutes"), up.get("auto_delete_minutes"),
+                repr(sorted((k.lower(), sorted(v.items())) for k, v in (up.get("game_overrides") or {}).items())))
 
     # -- 3. 처리 확인과 정리 ---------------------------------------------------------------------
     def cleanup(self, svc):

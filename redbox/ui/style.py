@@ -50,6 +50,11 @@ QLabel#tilevalue {{ font-size: 16px; font-weight: 700; }}
 QLabel#tilenote {{ font-size: 12px; color: {C['text2']}; }}
 QPushButton#link {{ background: transparent; border: none; color: {C['text2']}; padding: 4px 0; font-weight: 600; }}
 QPushButton#link:hover {{ color: {C['accent']}; }}
+QLabel#rulename {{ background: transparent; }}
+QLabel#rulewarn {{ color: {C['warn']}; font-size: 12px; font-weight: 700; background: transparent; }}
+QPushButton#rulebtn {{ background: {C['warn']}; border: 1px solid {C['warn']}; padding: 0 12px; font-size: 12px; font-weight: 700; color: #16171a; }}
+QPushButton#rulebtn:hover {{ background: #f0c96a; border-color: #f0c96a; color: #16171a; }}
+QPushButton#rulebtn:pressed {{ background: {C['warn']}; border-color: #16171a; }}
 QFrame#banner {{ background: {C['neg_bg']}; border: 1px solid {C['neg_border']}; }}
 QLabel#bannertitle {{ font-weight: 800; color: {C['neg']}; }}
 QLabel#bannerdesc {{ color: {C['text2']}; }}
@@ -68,6 +73,7 @@ QLabel#colhead {{ color: {C['muted']}; font-size: 12px; font-weight: 700; }}
 QWidget#listhead {{ border-bottom: 1px solid {C['border']}; }}
 QLabel#toast {{ background: {C['surface3']}; border: 1px solid {C['border2']}; padding: 10px 18px; color: {C['text']}; }}
 QLabel#dlgtext {{ color: {C['text2']}; font-size: 14px; }}
+QLabel#dlghead {{ color: {C['text']}; font-size: 14px; font-weight: 700; }}
 QToolTip {{ background: {C['surface3']}; color: {C['text']}; border: 1px solid {C['border2']}; padding: 6px 8px; }}
 QComboBox {{ combobox-popup: 0; }}
 QComboBox QAbstractItemView {{ background: {C['surface2']}; border: 1px solid {C['border2']}; outline: none; padding: 4px; }}
@@ -106,6 +112,8 @@ QPushButton:disabled {{ color: {C['muted']}; border-color: {C['border']}; }}
 QPushButton#primary {{ background: {C['accent']}; border-color: {C['accent']}; color: {C['on_accent']}; font-weight: 700; }}
 QPushButton#primary:hover {{ background: {C['accent_hover']}; color: {C['on_accent']}; }}
 QPushButton#primary:pressed {{ background: {C['accent']}; border-color: {C['text']}; color: {C['on_accent']}; }}
+QPushButton#danger {{ color: {C['neg']}; }}
+QPushButton#danger:hover {{ border-color: {C['neg']}; color: {C['neg']}; }}
 QPushButton#primary:disabled {{ background: {C['surface2']}; border-color: {C['border2']}; color: {C['text2']}; font-weight: 600; }}
 QTableWidget QPushButton {{ padding: 2px 10px; }}
 QPushButton#iconbtn {{ padding: 0; }}

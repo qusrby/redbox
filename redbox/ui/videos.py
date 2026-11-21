@@ -5,15 +5,16 @@ import os
 
 from PyQt6.QtCore import QObject, QRect, QRectF, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QIcon, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import (QHBoxLayout, QMenu, QScrollArea, QStackedWidget, QTableWidgetItem, QVBoxLayout,
-                             QWidget)
+from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QMenu, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
+                             QTableWidgetItem, QVBoxLayout, QWidget)
 
 from .. import config
+from ..uploader.store import file_key
 from ..i18n import tr
 from . import icons
 from .art import CARD_H, CARD_W
 from .style import C
-from .widgets import (GAUGE, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
+from .widgets import (GAUGE, ElideLabel, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
                       rec_len, rec_time, table)
 
 GAP = 18
@@ -69,6 +70,66 @@ def original_state(r, exists=None):
     if st == "auto_deleted":
         return tr("orig.deleted"), C["neg"]                  # 빨강(정리됨은 회색 그대로)
     return tr("orig.missing"), C["neg"] if st == "waiting" else C["muted"]
+
+
+class RuleBar(QWidget):
+    """바뀐 길이 규칙 경고와 확인 버튼(누르면 사유를 보여 주고 적용할지 묻는 대화 상자).
+    목록 줄은 게임 이름 아래 줄에(name, left 를 준다), 카드는 그림 아래 끝에 띠로 붙는다.
+    버튼 밖을 누르면 아래(줄, 카드)로 넘겨 평소처럼 영상이 열린다."""
+    H = 26
+
+    def __init__(self, svc, key, act, card=False, name=None, left=0):
+        super().__init__()
+        self.svc, self.key, self.card, self.act = svc, key, card, act
+        h = QHBoxLayout()
+        h.setSpacing(6)
+        if card:
+            self.setLayout(h)
+            h.setContentsMargins(10, 0, 8, 0)
+        else:                              # 표: 위에 게임 이름(칸 글자 대신), 아래에 경고와 버튼
+            v = QVBoxLayout(self)
+            v.setContentsMargins(left, 0, 12, 0)
+            v.setSpacing(5)
+            v.addStretch(1)
+            v.addWidget(ElideLabel(name or "", "rulename"))
+            v.addLayout(h)
+            v.addStretch(1)
+        ic = QLabel()
+        ic.setPixmap(icons.pixmap("warning", C["warn"], 14))
+        h.addWidget(ic)
+        text = ElideLabel(tr(f"rule.{act}"), "rulewarn")      # 좁으면 문구가 먼저 줄어든다(버튼은 그대로)
+        text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)   # 자리가 있으면 글자 길이만큼
+        h.addWidget(text, 1 if card else 0)
+        h.addSpacing(10)
+        b = QPushButton(tr("rule.check"))
+        b.setObjectName("rulebtn")
+        b.setFixedHeight(self.H)
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
+        b.clicked.connect(self._open)
+        h.addWidget(b)
+        if not card:
+            h.addStretch(1)
+        self.setMouseTracking(True)
+
+    def _open(self):
+        from .dialogs import RuleDialog
+        w = self.window()
+        if RuleDialog(w, self.svc, self.key, self.act).exec() and hasattr(w, "refresh"):
+            QTimer.singleShot(0, w.refresh)
+
+    def paintEvent(self, _e):
+        if self.card:
+            p = QPainter(self)
+            p.fillRect(self.rect(), QColor(0, 0, 0, 200))
+            p.end()
+
+
+def rule_bars_wanted(svc, r):
+    """이 기록에 바뀐 규칙 경고를 붙일지: ('upload'|'exclude'|'delete') 또는 None."""
+    try:
+        return svc.uploader.rule_change(r)
+    except Exception:
+        return None
 
 
 def record_menu(parent, r, pos):
@@ -195,7 +256,24 @@ class RecordTable(QObject):
                 if c == 0:
                     it.setIcon(self._icon(r.get("game", "")))
                 t.setItem(i, c, it)
+            act = rule_bars_wanted(svc, r)
+            if act:
+                t.item(i, 0).setForeground(QColor(0, 0, 0, 0))        # 이름은 경고 위에 다시 쓴다
+                t.setCellWidget(i, 0, RuleBar(svc, file_key(r.get("path", "")), act,
+                                              name=r.get("game", ""), left=self._text_left(i)))
         self.update_progress()
+
+    def _text_left(self, row):
+        """게임 칸에서 글자가 시작하는 x(그림 뒤). 경고 줄을 게임 이름과 같은 자리에 맞춘다."""
+        from PyQt6.QtWidgets import QStyle, QStyleOptionViewItem
+        t = self.table
+        idx = t.model().index(row, 0)
+        opt = QStyleOptionViewItem()
+        t.itemDelegate().initStyleOption(opt, idx)
+        opt.rect = t.visualRect(idx)
+        opt.widget = t
+        r = t.style().subElementRect(QStyle.SubElement.SE_ItemViewItemText, opt, t)
+        return max(0, r.left() - opt.rect.left() - 9)      # 9: 칸 글자가 실제로 그려지는 자리와 맞춤(Fusion 글자 여백)
 
     def update_progress(self):
         """올리고 있는 줄의 글자와 게이지만 고친다(표 전체를 다시 채우지 않고 1초마다)."""
@@ -215,9 +293,13 @@ class RecordTable(QObject):
 class Card(QWidget):
     """녹화 하나. live 면 지금 녹화 중인 카드(빨간 테두리, 경과 시간)."""
 
-    def __init__(self, art, key, rec=None, live=None, busy=False):
+    def __init__(self, art, key, rec=None, live=None, busy=False, svc=None):
         super().__init__()
         self.art, self.key, self.rec, self.live, self.busy = art, key, rec, live, busy
+        act = rule_bars_wanted(svc, rec) if svc is not None and rec else None
+        self.rule = RuleBar(svc, key, act, card=True) if act else None
+        if self.rule:
+            self.rule.setParent(self)
         self.progress = 0.0
         self.orig = original_state(rec) if rec else None      # 그릴 때마다 파일을 확인하지 않게 만들 때 한 번
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
@@ -285,7 +367,8 @@ class Card(QWidget):
                 self._chip(p, 10, 10, text, QColor(C["text2"]), dark)
             n = rec_len(r)
             if n:
-                self._chip(p, w - 10, th - 32, fmt_len(n), QColor("#ffffff"), dark, right=True)
+                bar = self.rule.height() if self.rule else 0          # 경고 띠가 있으면 그 위에
+                self._chip(p, w - 10, th - 32 - bar, fmt_len(n), QColor("#ffffff"), dark, right=True)
             if self.busy:                  # 그림 아래 끝에 업로드 게이지
                 p.fillRect(QRectF(0, th - 4, w, 4), QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(0, th - 4, w * max(0.0, min(1.0, self.progress)), 4), QColor(C["accent"]))
@@ -341,6 +424,13 @@ class Card(QWidget):
     def leaveEvent(self, e):
         self.update()
         super().leaveEvent(e)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.rule:
+            th = round(self.width() * CARD_H / CARD_W)
+            h = RuleBar.H + 10
+            self.rule.setGeometry(0, th - h, self.width(), h)
 
 
 class DayHead(QWidget):
@@ -562,7 +652,9 @@ class VideosPage(QWidget):
             not self.query or self.query in (live.game or "").lower())
         cur = uploading_rec(store)
         sig = (self.filter, self.query, self.view, id(live) if show_live else None, id(cur) if cur else None,
-               [(k, r.get("status"), r.get("cleaned_up"), r.get("processing_ok"), has_original(r)) for k, r in shown])
+               self.svc.uploader.rules_signature(),
+               [(k, r.get("status"), r.get("cleaned_up"), r.get("processing_ok"), has_original(r))
+                for k, r in shown])
         if sig == self._sig:
             return
         self._sig = sig
@@ -610,7 +702,7 @@ class VideosPage(QWidget):
                 self.live_card = Card(self.art, "", live=live)
                 items.append(("card", self.live_card))
             for k, r in recs:
-                c = Card(self.art, k, rec=r, busy=r is cur)
+                c = Card(self.art, k, rec=r, busy=r is cur, svc=self.svc)
                 if c.busy:
                     c.progress = upload_progress(self.svc, cur)
                 self.cards[k] = c

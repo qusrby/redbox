@@ -3,13 +3,15 @@ import os
 
 from PyQt6.QtCore import QFileInfo, QSize, Qt
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import (QDialog, QFileDialog, QFileIconProvider, QFrame, QHBoxLayout, QLabel, QScrollArea,
-                             QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QDialog, QFileDialog, QFileIconProvider, QFrame, QHBoxLayout, QLabel, QPushButton,
+                             QScrollArea, QVBoxLayout, QWidget)
 
 from .. import config
 from ..i18n import tr
-from .widgets import (Check, ElideLabel, KeepControl, SearchBox, SmoothWheel, button, hline, label, setting_row,
-                      spin, units)
+from . import icons
+from .style import C
+from .widgets import (Check, ElideLabel, KeepControl, SearchBox, SmoothWheel, button, hline, label, open_target,
+                      setting_row, spin, units)
 
 
 class _Dialog(QDialog):
@@ -131,6 +133,64 @@ class RulesDialog(_Dialog):
 
 
 _RUNTIME = ("java.exe", "javaw.exe", "python.exe", "pythonw.exe", "node.exe", "dotnet.exe")
+
+
+class RuleDialog(_Dialog):
+    """바뀐 길이 규칙으로 판정이 달라진 영상 하나: 왜 경고가 떴는지 보여 주고 적용할지 묻는다(취소하면 경고는 남는다)."""
+
+    def __init__(self, parent, svc, key, act):
+        super().__init__(parent, tr("rule.title"))
+        self.svc, self.key, self.act = svc, key, act
+        self.setMinimumWidth(520)
+        up = svc.uploader
+        rec = svc.store.data["recordings"].get(key) or {}
+        game = rec.get("game") or ""
+        mn, dl, _keep = up.rules_for(game)
+
+        def minutes(sec):
+            return tr("rule.minutes").format(n=f"{sec / 60:g}")
+        from .widgets import fmt_len, fmt_time, rec_len, rec_time
+        head = f"{game}  {fmt_time(rec_time(rec))}  ({fmt_len(rec_len(rec))})"
+        top = QHBoxLayout()
+        top.addWidget(label(head, "dlghead"), 1)
+        path, url = rec.get("path", ""), rec.get("url")       # 원본이 있으면 원본, 없으면 유튜브
+        if os.path.isfile(path) or url:
+            local = os.path.isfile(path)
+            go = QPushButton(tr("rule.open.file" if local else "rule.open.youtube"))
+            go.setObjectName("link")
+            go.setIcon(icons.icon("play" if local else "external", C["text2"], 14))
+            go.setCursor(Qt.CursorShape.PointingHandCursor)
+            go.clicked.connect(lambda: os.startfile(path) if os.path.isfile(path) else open_target(url))
+            top.addWidget(go)
+        self.lay.addLayout(top)
+        old = rec.get("rule_at")
+        if rec.get("status") == "excluded":
+            was = tr("rule.was.exclude").format(old=minutes(old[0])) if old else tr("rule.was.exclude.unknown")
+        else:
+            was = tr("rule.was.upload")
+        now = tr(f"rule.now.{act}").format(mn=minutes(mn), dl=minutes(dl))
+        if any(k.lower() == game.lower() for k in (svc.cfg["upload"].get("game_overrides") or {})):
+            now += f" ({tr('rule.game').format(g=game)})"
+        for text in (was, now, tr("rule.ask")):
+            self.lay.addWidget(label(text, "dlgtext", wrap=True))
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        if act != "delete":                # 판정과 상관없이 지울 수도 있게(되돌릴 수 없으니 왼쪽에 따로)
+            row.addWidget(button(tr("rule.apply.delete"), self._delete), 0)
+            row.itemAt(0).widget().setObjectName("danger")
+        row.addStretch(1)
+        row.addWidget(button(tr("rule.cancel"), self.reject))
+        row.addWidget(button(tr(f"rule.apply.{act}"), self._apply, True))
+        self.lay.addSpacing(4)
+        self.lay.addLayout(row)
+
+    def _delete(self):
+        if self.svc.uploader.delete_original(self.key):
+            self.accept()
+
+    def _apply(self):
+        self.svc.uploader.apply_rule_change(self.key)
+        self.accept()
 
 
 def not_a_game(path_lower, name):
