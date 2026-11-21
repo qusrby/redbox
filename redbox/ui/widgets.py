@@ -21,11 +21,15 @@ SETTING_ROW_H = 66    # 설정 한 줄의 높이(설명이 있든 없든 같게)
 
 
 class Dot(QWidget):
-    """상태 점(동그라미). 색만 바뀔 때 다시 그린다."""
+    """상태 표시. 색에 따라 모양이 정해진다: 정상(초록) 체크, 진행 중(파랑) 업로드, 문제(빨강 계열) 느낌표,
+    녹화 중과 그 밖의 상태는 동그라미. 바뀔 때만 다시 그린다."""
 
-    def __init__(self, size=8):
+    MARKS = {"ok": "mark_check", "accent": "mark_upload", "neg": "alert"}
+
+    def __init__(self, size=16, dot=8):
         super().__init__()
         self.setFixedSize(size, size)
+        self.dot = dot
         self._color = None
 
     def set_color(self, color):
@@ -38,9 +42,14 @@ class Dot(QWidget):
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(self._color))
-        p.drawEllipse(QRectF(self.rect()))
+        mark = next((m for k, m in self.MARKS.items() if C[k] == self._color), None)
+        if mark:
+            icons.paint(p, mark, QRectF(self.rect()), self._color)
+        else:
+            d = self.dot
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(self._color))
+            p.drawEllipse(QRectF((self.width() - d) / 2, (self.height() - d) / 2, d, d))
         p.end()
 
 

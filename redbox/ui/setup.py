@@ -77,7 +77,7 @@ def status_row(name):
     nm = label(name, "rowtitle")
     nm.setFixedWidth(150)
     lay.addWidget(nm)
-    dot = Dot(10)
+    dot = Dot(18, 10)
     lay.addWidget(dot, 0, Qt.AlignmentFlag.AlignVCenter)
     val = label("", "rowtitle")
     lay.addWidget(val, 1)

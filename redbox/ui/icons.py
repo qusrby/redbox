@@ -30,6 +30,9 @@ PATHS = {
     "warning": '<path d="M12 4l9 15.5H3z" {L}/><path d="M12 10v4" {L}/><circle cx="12" cy="16.8" r="1" fill="{c}"/>',
     "upload": '<path d="M12 15.5V4.5M7.5 9L12 4.5 16.5 9" {L}/><path d="M4.5 15v4.5h15V15" {L}/>',
     "check": '<path d="M5 12.5l4.5 4.5L19 7.5" {L}/>',
+    # 상태 표시용(대시보드 칸): 작은 크기에서도 보이게 굵은 선
+    "mark_check": '<path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="{c}" stroke-width="2.8" stroke-linecap="square"/>',
+    "mark_upload": '<path d="M12 15.5V4.5M7 9.5l5-5 5 5M4.5 14.5v5h15v-5" fill="none" stroke="{c}" stroke-width="2.5" stroke-linecap="square"/>',
     "more": '<circle cx="6" cy="12" r="1.6" fill="{c}"/><circle cx="12" cy="12" r="1.6" fill="{c}"/>'
             '<circle cx="18" cy="12" r="1.6" fill="{c}"/>',
     "youtube": '<rect x="2.5" y="5.5" width="19" height="13" rx="3.5" fill="{c}"/><path d="M10 9v6l5.2-3z" fill="{bg}"/>',
