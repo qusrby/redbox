@@ -67,7 +67,7 @@ class RestartDialog(_Dialog):
 
 
 class RulesDialog(_Dialog):
-    """게임 하나의 업로드 규칙(업로드 최소 길이, 자동 삭제 길이, 원본 보관 기간)."""
+    """게임 하나의 업로드 규칙(업로드 최소 길이, 자동 삭제 길이, 업로드 뒤 녹화본 삭제 시점)."""
     FIELDS = (("min_minutes", "set.min", 0, 600, 1), ("auto_delete_minutes", "set.autodel", 0, 60, 1),
               ("keep_days", "set.keep", 0, 365, 2))
 
@@ -88,7 +88,7 @@ class RulesDialog(_Dialog):
             base = cfg["upload"].get(key, 0)
             custom = key in over
             if key == "keep_days":
-                sp = KeepControl(over.get(key, base), unit[u])
+                sp = KeepControl(over.get(key, base), tr("unit.day_after"))
             else:
                 sp = spin(over.get(key, base), lo, hi,
                           {"min_minutes": tr("unit.min_ge"), "auto_delete_minutes": tr("unit.min_le")}.get(key, unit[u]),

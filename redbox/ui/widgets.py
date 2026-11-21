@@ -16,6 +16,7 @@ from .style import C
 
 ROW_H = 40
 GAUGE = Qt.ItemDataRole.UserRole + 1     # 표 칸의 진행률(0~1). 있으면 글자 아래에 게이지를 그린다
+SUBTEXT = Qt.ItemDataRole.UserRole + 2   # 표 칸의 작은 둘째 줄 글자. 있으면 글자를 위로 올리고 아래에 쓴다
 CONTROL_H = 34        # 버튼, 드롭다운, 숫자 칸, 검색 칸, 버튼 묶음의 높이(어디서나 같게)
 SETTING_ROW_H = 66    # 설정 한 줄의 높이(설명이 있든 없든 같게)
 
@@ -265,7 +266,30 @@ class RowHover(QObject):
             def paint(self, p, opt, idx):
                 if idx.row() == hover.row:
                     p.fillRect(opt.rect, QColor(C["row_hover"]))
-                super().paint(p, opt, idx)
+                sub = idx.data(SUBTEXT)
+                if not sub:
+                    super().paint(p, opt, idx)
+                else:                      # 칸(바탕, 구분선)은 그대로, 글자만 위로 올리고 아래에 작은 글자
+                    o = QStyleOptionViewItem(opt)
+                    self.initStyleOption(o, idx)
+                    text, o.text = o.text, ""
+                    style = o.widget.style() if o.widget else QApplication.style()
+                    style.drawControl(QStyle.ControlElement.CE_ItemViewItem, o, p, o.widget)
+                    tr_ = style.subElementRect(QStyle.SubElement.SE_ItemViewItemText, o, o.widget)
+                    left = tr_.left() + style.pixelMetric(QStyle.PixelMetric.PM_FocusFrameHMargin, None, o.widget) + 1
+                    width = opt.rect.right() - left - 8
+                    mid = opt.rect.center().y()
+                    align = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+                    p.save()
+                    p.setFont(o.font)
+                    p.setPen(o.palette.color(o.palette.ColorRole.Text))
+                    p.drawText(QRectF(left, mid - 21, width, 20), align, text)
+                    f = QFont(o.font)
+                    f.setPixelSize(12)
+                    p.setFont(f)
+                    p.setPen(QColor(C["muted"]))
+                    p.drawText(QRectF(left, mid + 1, width, 20), align, sub)
+                    p.restore()
                 g = idx.data(GAUGE)
                 if g is not None:
                     r = QRectF(opt.rect).adjusted(12, 0, -16, 0)
@@ -696,7 +720,7 @@ def spin(value, lo, hi, unit, off_text=None):
 
 
 class KeepControl(QWidget):
-    """원본 보관: [바로 삭제 | 기간 보관] + 날 수. 값 0 = 바로 삭제."""
+    """업로드 뒤 녹화본 삭제: [바로 | 기간 지정] + 날 수. 값 0 = 바로 삭제."""
     valueChanged = pyqtSignal(int)
 
     def __init__(self, days, unit):

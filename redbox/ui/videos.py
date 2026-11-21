@@ -14,7 +14,7 @@ from ..i18n import tr
 from . import icons
 from .art import CARD_H, CARD_W
 from .style import C
-from .widgets import (GAUGE, ElideLabel, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
+from .widgets import (GAUGE, SUBTEXT, ElideLabel, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
                       rec_len, rec_time, table)
 
 GAP = 18
@@ -37,20 +37,6 @@ def upload_progress(svc, cur):
     return pr[1] if pr and cur is not None and pr[0] == cur.get("name") else 0.0
 
 
-def upload_state(r, busy=False, progress=0.0):
-    """(문구, 색, 아이콘) 업로드 진행. busy 는 지금 올리고 있는 기록."""
-    st = r.get("status")
-    if st == "uploaded":
-        return tr("up.st.done"), C["ok"], "youtube"          # 초록
-    if st == "waiting":
-        if busy:
-            return f"{tr('up.st.busy')} {int(progress * 100)}%", C["accent"], "upload"   # 파랑
-        return tr("up.st.waiting"), C["text2"], None
-    if st in ("excluded", "auto_deleted"):
-        return tr("up.st.skipped"), C["warn"], None          # 노랑
-    return tr("step.none"), C["muted"], None
-
-
 def has_original(r):
     """원본 파일이 PC 에 있는지. 정리됐거나 삭제된 기록은 파일을 확인하지 않는다(1초마다 수백 개를 확인하지 않게)."""
     if r.get("cleaned_up") or r.get("status") in ("auto_deleted", "missing"):
@@ -58,18 +44,49 @@ def has_original(r):
     return os.path.exists(r.get("path", ""))
 
 
-def original_state(r, exists=None):
-    """(문구, 색) 원본 파일이 지금 PC 에 있는지. 올린 뒤 유튜브 처리를 기다리는 동안은 처리 대기(끝나면 정리된다)."""
-    if has_original(r) if exists is None else exists:
-        if r.get("status") == "uploaded" and not r.get("processing_ok"):
-            return tr("orig.processing"), C["text2"]
-        return tr("orig.kept"), C["accent"]
+def delete_date(r, up):
+    """올리고 유튜브 처리까지 끝난 녹화본이 PC 에서 지워질 날(datetime.date). 지우지 않거나 모르면 None."""
+    if up is None or r.get("status") != "uploaded" or not r.get("processing_ok"):
+        return None
+    if not up.up.get("delete_after_upload", True):
+        return None
+    try:
+        at = datetime.datetime.fromisoformat((r.get("uploaded_at") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if at.tzinfo:
+        at = at.astimezone().replace(tzinfo=None)
+    _mn, _dl, keep = up.rules_for(r.get("game"))
+    when = at + datetime.timedelta(hours=keep)
+    return when.date() if when > datetime.datetime.now() else None
+
+
+def record_state(r, busy=False, progress=0.0, up=None, exists=None):
+    """(문구, 색, 아이콘, 둘째 줄) 영상 하나의 상태. 업로드 단계와 녹화본 파일을 한 칸에 보인다.
+    둘째 줄은 업로드가 끝났는데 녹화본이 아직 PC 에 남아 있을 때만(지울 예정이면 삭제 예정, 아니면 저장).
+    busy 는 지금 올리고 있는 기록, up(업로더)을 주면 보관 기간 중인지 본다, exists 를 주면 파일을 다시 확인하지 않는다."""
     st = r.get("status")
+    have = has_original(r) if exists is None else exists
+    if st == "waiting":
+        if busy:
+            return f"{tr('up.st.busy')} {int(progress * 100)}%", C["accent"], "upload", None   # 파랑
+        if not have:
+            return tr("orig.missing"), C["neg"], None, None
+        return tr("up.st.waiting"), C["text2"], None, None
     if st == "uploaded":
-        return tr("orig.cleaned"), C["muted"]
+        if not r.get("processing_ok") and not r.get("cleaned_up"):
+            return tr("up.st.processing"), C["accent"], "youtube", None
+        sub = (tr("orig.until") if delete_date(r, up) else tr("orig.kept")) if have else None
+        return tr("up.st.done"), C["ok"], "youtube", sub                                   # 초록
+    if st == "excluded":
+        if not have:
+            return tr("orig.missing"), C["muted"], None, None
+        return tr("up.st.skipped"), C["warn"], None, None                                  # 노랑
     if st == "auto_deleted":
-        return tr("orig.deleted"), C["neg"]                  # 빨강(정리됨은 회색 그대로)
-    return tr("orig.missing"), C["neg"] if st == "waiting" else C["muted"]
+        return tr("orig.user" if r.get("reason") == "user_deleted" else "orig.deleted"), C["neg"], None, None
+    if st == "missing":
+        return tr("orig.missing"), C["muted"], None, None
+    return tr("step.none"), C["muted"], None, None
 
 
 class RuleBar(QWidget):
@@ -181,11 +198,11 @@ class RecordTable(QObject):
 
         def widest(keys, head):
             return max([fm.horizontalAdvance(tr(k)) for k in keys] + [fm.horizontalAdvance(tr(head))]) + 44
-        t = self.table = table([tr("col.game"), tr("col.when"), tr("col.length"), tr("col.upload"), tr("col.original")], 0,
+        t = self.table = table([tr("col.game"), tr("col.when"), tr("col.length"), tr("col.status")], 0,
                                {1: fm.horizontalAdvance("2026-00-00 00:00") + 48, 2: fm.horizontalAdvance(fmt_len(36000 + 3599)) + 44,
-                                3: max(widest(("up.st.waiting", "up.st.done", "up.st.skipped"), "col.upload"),
-                                       fm.horizontalAdvance(tr("up.st.busy") + " 100%") + 44),
-                                4: widest(("orig.kept", "orig.processing", "orig.cleaned", "orig.deleted", "orig.missing"), "col.original")})
+                                3: max(widest(("up.st.waiting", "up.st.done", "up.st.processing", "up.st.skipped", "orig.deleted",
+                                               "orig.user", "orig.missing", "orig.kept", "orig.until"), "col.status"),
+                                       fm.horizontalAdvance(tr("up.st.busy") + " 100%") + 44)})
         t.setIconSize(QSize(LIST_ART_W + ART_GAP, LIST_ART_H))      # 게임 칸 앞의 작은 게임 그림(+ 여백)
         t.verticalHeader().setDefaultSectionSize(ROW_H)
         t.cellClicked.connect(lambda r, _c: self._rec(r) and open_record(self._rec(r), self.parent_widget))
@@ -246,15 +263,16 @@ class RecordTable(QObject):
         for i, r in enumerate(recs):
             if r is cur:
                 self.busy_row = i
-            up_txt, up_col, _ic = upload_state(r, r is cur, upload_progress(svc, cur))
-            og_txt, og_col = original_state(r)
+            st_txt, st_col, _ic, st_sub = record_state(r, r is cur, upload_progress(svc, cur), svc.uploader)
             vals = [(r.get("game", ""), C["text"]), (fmt_time(rec_time(r)), C["text2"]),
-                    (fmt_len(rec_len(r)), C["text2"]), (up_txt, up_col), (og_txt, og_col)]
+                    (fmt_len(rec_len(r)), C["text2"]), (st_txt, st_col)]
             for c, (val, color) in enumerate(vals):
                 it = QTableWidgetItem(str(val))
                 it.setForeground(QColor(color))
                 if c == 0:
                     it.setIcon(self._icon(r.get("game", "")))
+                if c == 3 and st_sub:
+                    it.setData(SUBTEXT, st_sub)
                 t.setItem(i, c, it)
             act = rule_bars_wanted(svc, r)
             if act:
@@ -301,7 +319,8 @@ class Card(QWidget):
         if self.rule:
             self.rule.setParent(self)
         self.progress = 0.0
-        self.orig = original_state(rec) if rec else None      # 그릴 때마다 파일을 확인하지 않게 만들 때 한 번
+        self.up = svc.uploader if svc is not None else None
+        self.exists = has_original(rec) if rec else False     # 그릴 때마다 파일을 확인하지 않게 만들 때 한 번
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setCursor(Qt.CursorShape.PointingHandCursor if rec else Qt.CursorShape.ArrowCursor)
         self._scaled = None
@@ -358,13 +377,13 @@ class Card(QWidget):
             p.drawRect(QRectF(1, 1, w - 2, th - 2))
         else:
             r = self.rec
-            text, color, ic = upload_state(r, self.busy, self.progress)
+            text, color, ic, sub = record_state(r, self.busy, self.progress, self.up, self.exists)
             if ic == "youtube":
                 self._chip(p, 10, 10, text, QColor("#ffffff"), dark, "youtube", "#ff4e45")
             elif ic == "upload":
                 self._chip(p, 10, 10, text, QColor(C["accent"]), dark, "upload", C["accent"])
             else:
-                self._chip(p, 10, 10, text, QColor(C["text2"]), dark)
+                self._chip(p, 10, 10, text, QColor(color if color != C["muted"] else C["text2"]), dark)
             n = rec_len(r)
             if n:
                 bar = self.rule.height() if self.rule else 0          # 경고 띠가 있으면 그 위에
@@ -384,7 +403,7 @@ class Card(QWidget):
                 p.setPen(QPen(QColor(C["accent"]), 2))
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.drawRect(QRectF(1, 1, w - 2, th - 2))
-        # 아래 글자: 게임 이름 / 시각과 원본 상태
+        # 아래 글자: 게임 이름 / 시각과 녹화본 상태(업로드 뒤 남아 있을 때)
         title = QFont(self.font())
         title.setPixelSize(14)
         title.setWeight(QFont.Weight.Bold)
@@ -401,7 +420,7 @@ class Card(QWidget):
             right, rcolor = tr("orig.recording"), C["rec"]
         else:
             left = fmt_time(rec_time(self.rec))           # 녹화 시각(날짜까지). 길이와 헷갈리지 않게
-            right, rcolor = self.orig
+            right, rcolor = record_state(self.rec, exists=self.exists, up=self.up)[3] or "", C["muted"]
         p.setPen(QColor(C["muted"]))
         p.drawText(QRectF(0, th + 32, w, 18), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, left)
         p.setPen(QColor(rcolor))
