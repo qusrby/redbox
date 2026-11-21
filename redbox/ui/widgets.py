@@ -19,6 +19,30 @@ CONTROL_H = 34        # 버튼, 드롭다운, 숫자 칸, 검색 칸, 버튼 묶
 SETTING_ROW_H = 66    # 설정 한 줄의 높이(설명이 있든 없든 같게)
 
 
+class Dot(QWidget):
+    """상태 점(동그라미). 색만 바뀔 때 다시 그린다."""
+
+    def __init__(self, size=8):
+        super().__init__()
+        self.setFixedSize(size, size)
+        self._color = None
+
+    def set_color(self, color):
+        if color != self._color:
+            self._color = color
+            self.update()
+
+    def paintEvent(self, _e):
+        if not self._color:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(self._color))
+        p.drawEllipse(QRectF(self.rect()))
+        p.end()
+
+
 # -- 글자 모양 -------------------------------------------------------------------------------------
 def fmt_len(sec):
     """길이: 1분 25초, 2시간 1분 2초(영어 1m 25s, 2h 1m 2s). 0 인 단위는 빼되 초만 있으면 초."""

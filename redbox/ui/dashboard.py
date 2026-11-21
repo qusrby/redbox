@@ -4,13 +4,13 @@ import time
 
 from PyQt6.QtCore import QEvent, QRectF, Qt
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPixmap
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ..i18n import tr
 from .art import cover
 from .style import C
 from .videos import RecordTable, ROW_H
-from .widgets import fmt_len, label
+from .widgets import Dot, fmt_len, fmt_time, label
 
 HEAD_H = 36            # 표 머리줄 높이
 
@@ -39,8 +39,7 @@ class Hero(QFrame):
         v.setSpacing(4)
         top = QHBoxLayout()
         top.setSpacing(8)
-        self.dot = QLabel()
-        self.dot.setFixedSize(10, 10)
+        self.dot = Dot(10)
         top.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
         self.state = label("", "herostate")
         top.addWidget(self.state)
@@ -104,8 +103,7 @@ class Tile(QFrame):
         v.addWidget(self.name)
         row = QHBoxLayout()
         row.setSpacing(8)
-        self.dot = QLabel()
-        self.dot.setFixedSize(8, 8)
+        self.dot = Dot(8)
         row.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
         self.value = label("", "tilevalue")
         row.addWidget(self.value, 1)
@@ -116,7 +114,7 @@ class Tile(QFrame):
     def set(self, name, value, color, note):
         _set(self.name, name)
         _set(self.value, value, f"color: {color if color != C['ok'] else C['text']};")
-        _set(self.dot, css=f"background: {color};")
+        self.dot.set_color(color)
         _set(self.note, note or " ")
 
 
@@ -173,11 +171,12 @@ class DashboardPage(QWidget):
         h = self.hero
         if s:
             color, state, big = C["rec"], tr("state.recording"), s.game
-            meta = tr("dash.started").format(t=datetime.datetime.fromtimestamp(s.start).strftime("%H:%M"))
+            meta = tr("dash.started").format(t=fmt_time(datetime.datetime.fromtimestamp(s.start)))
             _set(h.timer, fmt_len(now - s.start))
+            h.timer.show()
             h.set_game(s.game)
         else:
-            _set(h.timer, "")
+            h.timer.hide()
             h.set_game(None)
             if problem:
                 color, state, big, meta = C["neg"], tr("state.blocked"), problem[0], problem[1]
@@ -187,7 +186,7 @@ class DashboardPage(QWidget):
                 color, state, big, meta = C["text2"], tr("state.external"), tr("dash.external.big"), ""
             else:
                 color, state, big, meta = C["ok"], tr("state.ready"), tr("dash.ready.big"), ""
-        _set(h.dot, css=f"background: {color};")
+        h.dot.set_color(color)
         _set(h.state, state, f"color: {color};")
         _set(h.big, big)
         _set(h.meta, meta)

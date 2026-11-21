@@ -14,7 +14,7 @@ from ..recorder import obs as obsmod
 from ..uploader import youtube
 from . import frame, icons
 from .style import C, app_icon, logo_pixmap
-from .widgets import Check, Combo, button, hline, label, open_target, setting_row
+from .widgets import Check, Combo, Dot, button, hline, label, open_target, setting_row
 
 DOCS_YOUTUBE = "https://github.com/qusrby/redbox/blob/main/docs/youtube-key.md"
 CONSOLE = (   # (문구 키, 구글 클라우드 콘솔 주소)
@@ -77,8 +77,7 @@ def status_row(name):
     nm = label(name, "rowtitle")
     nm.setFixedWidth(150)
     lay.addWidget(nm)
-    dot = QLabel()
-    dot.setFixedSize(10, 10)
+    dot = Dot(10)
     lay.addWidget(dot, 0, Qt.AlignmentFlag.AlignVCenter)
     val = label("", "rowtitle")
     lay.addWidget(val, 1)
@@ -92,9 +91,7 @@ def status_row(name):
 def set_status(row, text, color):
     if row.val.text() != text:
         row.val.setText(text)
-    css = f"background: {color};"
-    if row.dot.styleSheet() != css:
-        row.dot.setStyleSheet(css)
+    row.dot.set_color(color)
 
 
 class SetupWindow(QWidget):

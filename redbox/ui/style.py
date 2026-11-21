@@ -1,6 +1,6 @@
 """화면 색과 스타일, 앱 아이콘(그려서 만든다)."""
 from PyQt6.QtCore import QByteArray, QRectF, Qt
-from PyQt6.QtGui import QFont, QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
 # 스팀처럼 어두운 화면 한 가지. 순수한 검정 바탕에 흰 글자는 대비가 너무 세서 눈이 아프다.
@@ -43,7 +43,7 @@ QFrame#hero {{ background: {C['surface']}; }}
 QLabel#herostate {{ font-size: 13px; font-weight: 800; }}
 QLabel#herobig {{ font-size: 26px; font-weight: 700; }}
 QLabel#herometa {{ font-size: 13px; color: {C['text2']}; }}
-QLabel#herotime {{ font-size: 22px; font-weight: 700; color: {C['rec']}; }}
+QLabel#herotime {{ font-size: 20px; font-weight: 700; color: #ffffff; background: {C['rec']}; padding: 4px 12px; }}
 QFrame#tile {{ background: {C['surface']}; border: 1px solid {C['border']}; }}
 QLabel#tilename {{ font-size: 12px; color: {C['muted']}; font-weight: 700; }}
 QLabel#tilevalue {{ font-size: 16px; font-weight: 700; }}
@@ -166,23 +166,30 @@ def app_font():
     return f
 
 
-LOGO = {   # 각진 빨간 타일 위 상자. 평소엔 선으로 그린 상자, 녹화 중이면 속이 찬 상자
-    False: ('<rect width="24" height="24" fill="{r}"/>'
-            '<path d="M12 4.5l7 3.8v7.4l-7 3.8-7-3.8V8.3z" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="miter"/>'
-            '<path d="M5 8.3l7 3.8 7-3.8M12 12.1v7.4" fill="none" stroke="#fff" stroke-width="1.9"/>'),
-    True: ('<rect width="24" height="24" fill="{r}"/><path d="M12 4.5l7 3.8v7.4l-7 3.8-7-3.8V8.3z" fill="#fff"/>'
-           '<path d="M5 8.3l7 3.8 7-3.8M12 12.1v7.4" fill="none" stroke="{r}" stroke-width="1.6"/>'),
-}
+LOGO = ('<rect width="24" height="24" fill="{r}"/>'      # 각진 빨간 타일 위 선으로 그린 상자
+        '<path d="M12 4.5l7 3.8v7.4l-7 3.8-7-3.8V8.3z" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="miter"/>'
+        '<path d="M5 8.3l7 3.8 7-3.8M12 12.1v7.4" fill="none" stroke="#fff" stroke-width="1.9"/>')
+REC_DOT = "#ff2a2a"     # 트레이 녹화 표시(OBS 처럼 왼쪽 아래 빨간 점)
 
 
 def logo_pixmap(size, recording=False):
-    """로고 그림 한 장(size 픽셀)."""
+    """로고 그림 한 장(size 픽셀). recording 이면 왼쪽 아래에 빨간 점, 타일과 섞이지 않게 둘레를 투명하게 판다."""
     pm = QPixmap(size, size)
     pm.fill(Qt.GlobalColor.transparent)
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' + LOGO[bool(recording)].replace("{r}", C["rec"]) + "</svg>"
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' + LOGO.replace("{r}", C["rec"]) + "</svg>"
     QSvgRenderer(QByteArray(svg.encode())).render(p, QRectF(0, 0, size, size))
+    if recording:
+        d, gap = size * 0.34, size * 0.07
+        r = QRectF(0, size - d, d, d)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        p.setBrush(QColor(0, 0, 0))
+        p.drawEllipse(r.adjusted(-gap, -gap, gap, gap))
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        p.setBrush(QColor(REC_DOT))
+        p.drawEllipse(r)
     p.end()
     return pm
 

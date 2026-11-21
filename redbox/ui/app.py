@@ -1,4 +1,5 @@
 """화면 앱: 트레이 아이콘과 메인 창. 감지, 녹화, 업로드는 별도 스레드의 서비스가 맡는다."""
+import os
 import subprocess
 import sys
 import threading
@@ -32,8 +33,9 @@ class App:
         self.cfg = config.load()
         i18n.set_language(self.cfg.get("language"))
         self.svc = Service(self.cfg)
-        try:
-            if startup.apply(self.cfg.get("start_with_windows", True)):
+        try:   # 첫 실행 안내를 마친 뒤에만, 개발용 데이터 폴더(REDBOX_HOME)로 띄운 것은 건드리지 않는다
+            if (self.cfg.get("setup_done") and not os.environ.get("REDBOX_HOME")
+                    and startup.apply(self.cfg.get("start_with_windows", True))):
                 self.svc.log("윈도우 시작 시 실행 설정을 맞춤: " + ("등록" if self.cfg.get("start_with_windows", True) else "해제"))
         except OSError as e:
             self.svc.log(f"[오류] 윈도우 시작 시 실행 설정 실패: {e}")

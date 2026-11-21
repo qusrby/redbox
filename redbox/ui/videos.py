@@ -273,7 +273,7 @@ class Card(QWidget):
         meta.setPixelSize(12)
         p.setFont(meta)
         if self.live:
-            left = tr("card.started").format(t=datetime.datetime.fromtimestamp(self.live.start).strftime("%H:%M"))
+            left = tr("card.started").format(t=fmt_time(datetime.datetime.fromtimestamp(self.live.start)))
             right, rcolor = tr("orig.recording"), C["rec"]
         else:
             left = fmt_time(rec_time(self.rec))           # 녹화 시각(날짜까지). 길이와 헷갈리지 않게
