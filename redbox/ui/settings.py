@@ -78,7 +78,14 @@ class SettingsPage(QScrollArea):
         en = Check()
         en.setChecked(bool(up.get("enabled")))
         en.toggled.connect(lambda val: self._set_up("enabled", val))
-        rows = [self.auth_row, setting_row(tr("set.upload.on"), tr("set.upload.on.desc"), en)]
+        privacy = Combo([("private", tr("set.privacy.private")), ("unlisted", tr("set.privacy.unlisted")),
+                         ("public", tr("set.privacy.public"))], up.get("privacy") or "private", width=180)
+        privacy.currentIndexChanged.connect(lambda _i: self._set_up("privacy", privacy.value()))
+        lists = Check()
+        lists.setChecked(bool(up.get("game_playlists", True)))
+        lists.toggled.connect(lambda val: self._set_up("game_playlists", bool(val)))
+        rows = [self.auth_row, setting_row(tr("set.upload.on"), "", en), setting_row(tr("set.privacy"), "", privacy),
+                setting_row(tr("set.playlists"), tr("set.playlists.desc"), lists)]
         for key, text, lo, hi, unit in (("daily_limit", "set.daily", 1, config.UPLOAD_DAILY_MAX, u_count),
                                         ("min_minutes", "set.min", 0, 600, tr("unit.min_ge"))):
             sp = spin(up.get(key), lo, hi, unit)

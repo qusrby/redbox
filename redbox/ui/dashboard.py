@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidg
 from ..i18n import tr
 from .art import cover
 from .style import C
-from .videos import RecordTable, ROW_H, uploading_rec
-from .widgets import Dot, fmt_elapsed, fmt_time, label, tabular
+from .videos import RecordTable, ROW_H, upload_progress, uploading_rec
+from .widgets import Dot, ElideLabel, fmt_elapsed, fmt_time, label, rec_time, tabular
 
 HEAD_H = 36            # 표 머리줄 높이
 
@@ -95,16 +95,22 @@ class Hero(QFrame):
 
 
 class Tile(QFrame):
-    """작은 상태 칸: 이름 / 점과 값 / 한 줄 설명."""
+    """작은 상태 칸: 이름(오른쪽에 보조 값) / 표시와 값 / 한 줄 설명(오른쪽에 시각). progress 가 있으면 아래 끝에 게이지."""
 
     def __init__(self):
         super().__init__()
         self.setObjectName("tile")
+        self.progress = None
         v = QVBoxLayout(self)
         v.setContentsMargins(18, 14, 18, 14)
         v.setSpacing(6)
+        top = QHBoxLayout()
+        top.setSpacing(8)
         self.name = label("", "tilename")
-        v.addWidget(self.name)
+        top.addWidget(self.name, 1)
+        self.side = label("", "tilenote")
+        top.addWidget(self.side)
+        v.addLayout(top)
         row = QHBoxLayout()
         row.setSpacing(8)
         self.dot = Dot(18, 9)
@@ -112,14 +118,37 @@ class Tile(QFrame):
         self.value = label("", "tilevalue")
         row.addWidget(self.value, 1)
         v.addLayout(row)
-        self.note = label("", "tilenote")
-        v.addWidget(self.note)
+        bottom = QHBoxLayout()
+        bottom.setSpacing(6)
+        self.note = ElideLabel("", "tilenote")        # 긴 게임 이름은 줄임표로(시각은 늘 보이게)
+        bottom.addWidget(self.note, 1)
+        self.when = label("", "tilenote")
+        bottom.addWidget(self.when)
+        v.addLayout(bottom)
 
-    def set(self, name, value, color, note):
+    def set(self, name, value, color, note, side="", when="", progress=None):
         _set(self.name, name)
+        _set(self.side, side)
         _set(self.value, value, f"color: {color if color != C['ok'] else C['text']};")
         self.dot.set_color(color)
-        _set(self.note, note or " ")
+        if self.note.text() != (note or " "):
+            self.note.setText(note or " ")
+            self.note.setToolTip(note or "")
+        _set(self.when, when)
+        if progress != self.progress:
+            self.progress = progress
+            self.update()
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if self.progress is None:
+            return
+        p = QPainter(self)
+        bar = QRectF(1, self.height() - 4, self.width() - 2, 3)          # 칸 아래 테두리 바로 안쪽
+        p.fillRect(bar, QColor(C["border"]))
+        p.fillRect(QRectF(bar.left(), bar.top(), bar.width() * max(0.0, min(1.0, self.progress)), bar.height()),
+                   QColor(C["accent"]))
+        p.end()
 
 
 class DashboardPage(QWidget):
@@ -194,8 +223,16 @@ class DashboardPage(QWidget):
         _set(h.state, state, f"color: {color};")
         _set(h.big, big)
         _set(h.meta, meta)
-        for tile, (name, value, c, note) in zip(self.tiles, rows):
-            tile.set(name, value, c, note)
+        for i, (tile, (name, value, c, note)) in enumerate(zip(self.tiles, rows)):
+            if i == 3:          # 유튜브: 오늘 올린 수는 이름 옆, 아래 줄은 지금 올리는 영상(게임 이름과 녹화 시각)
+                cur = uploading_rec(svc.store) if svc.uploader.progress else None
+                if cur is not None:
+                    tile.set(name, value, c, cur.get("game") or cur.get("name", ""), side=note,
+                             when=fmt_time(rec_time(cur)), progress=upload_progress(svc, cur))
+                else:
+                    tile.set(name, value, c, "", side=note)
+            else:
+                tile.set(name, value, c, note)
 
     def refresh(self):
         store = self.svc.store
