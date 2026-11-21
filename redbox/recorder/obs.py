@@ -189,6 +189,14 @@ class Obs:
             self._prev_scene = None
         return getattr(res, "output_path", None)
 
+    def screenshot(self, width, height):
+        """캡처 소스의 지금 화면(jpg 바이트). 비율을 지키며 width x height 안에 맞춘다."""
+        import base64
+        if not self.capture:
+            return None
+        r = self.client.get_source_screenshot(self.capture, "jpg", width, height, 80)
+        return base64.b64decode(r.image_data.split(",", 1)[1])
+
     def set_record_dir(self, folder):
         self.client.set_record_directory(folder)
 

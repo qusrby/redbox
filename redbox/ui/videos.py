@@ -8,11 +8,11 @@ from PyQt6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QIcon, QPa
 from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QMenu, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
                              QTableWidgetItem, QVBoxLayout, QWidget)
 
-from .. import config
+from .. import config, thumbs
 from ..uploader.store import file_key
 from ..i18n import tr
 from . import icons
-from .art import CARD_H, CARD_W
+from .art import CARD_H, CARD_W, cover
 from .style import C
 from .widgets import (GAUGE, SUBTEXT, ElideLabel, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
                       rec_len, rec_time, table)
@@ -20,7 +20,9 @@ from .widgets import (GAUGE, SUBTEXT, ElideLabel, IconButton, fmt_elapsed, tabul
 GAP = 18
 CARD_MIN_W = 250
 TEXT_H = 58
-LIST_ART_W, LIST_ART_H = 120, 56        # 스팀 대표 그림 비율(460x215)
+LIST_ART_W, LIST_ART_H = 100, 56        # 영상 썸네일(16:9). 없으면 게임 그림
+GAME_W, GAME_H = 60, 28                  # 썸네일 옆 작은 게임 그림(스팀 대표 그림 비율)
+GAME_GAP = 10                            # 썸네일과 게임 그림 사이
 ART_GAP = 14                             # 그림과 게임 이름 사이
 ROW_H = LIST_ART_H + 18
 
@@ -203,7 +205,7 @@ class RecordTable(QObject):
                                 3: max(widest(("up.st.waiting", "up.st.done", "up.st.processing", "up.st.skipped", "orig.deleted",
                                                "orig.user", "orig.missing", "orig.kept", "orig.until"), "col.status"),
                                        fm.horizontalAdvance(tr("up.st.busy") + " 100%") + 44)})
-        t.setIconSize(QSize(LIST_ART_W + ART_GAP, LIST_ART_H))      # 게임 칸 앞의 작은 게임 그림(+ 여백)
+        t.setIconSize(QSize(LIST_ART_W + GAME_GAP + GAME_W + ART_GAP, LIST_ART_H))   # 썸네일, 게임 그림(+ 여백)
         t.verticalHeader().setDefaultSectionSize(ROW_H)
         t.cellClicked.connect(lambda r, _c: self._rec(r) and open_record(self._rec(r), self.parent_widget))
         t.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
@@ -239,16 +241,24 @@ class RecordTable(QObject):
         if r:
             record_menu(self.parent_widget, r, self.table.viewport().mapToGlobal(pos))
 
-    def _icon(self, game):
-        key = (game or "").lower()
+    def _icon(self, game, thumb=None):
+        """줄 앞 그림: 영상 썸네일과 그 옆 작은 게임 그림. 썸네일이 없으면 큰 자리에 게임 그림만."""
+        key = ((game or "").lower(), thumb)
         if key not in self.icons:
-            art = self.art.game_thumb(game, LIST_ART_W * 2, LIST_ART_H * 2)
-            pm = QPixmap((LIST_ART_W + ART_GAP) * 2, LIST_ART_H * 2)
+            k = 2
+            pm = QPixmap((LIST_ART_W + GAME_GAP + GAME_W + ART_GAP) * k, LIST_ART_H * k)
             pm.fill(Qt.GlobalColor.transparent)
             p = QPainter(pm)
-            p.drawPixmap(QRect(0, 0, LIST_ART_W * 2, LIST_ART_H * 2), art)   # 크기를 정해 그린다(그림의 배율과 상관없이)
+            shot = cover(QPixmap(thumb), LIST_ART_W * k, LIST_ART_H * k) if thumb else None
+            if shot is not None:
+                p.drawPixmap(QRect(0, 0, LIST_ART_W * k, LIST_ART_H * k), shot)
+                art = self.art.game_thumb(game, GAME_W * k, GAME_H * k)
+                p.drawPixmap(QRect((LIST_ART_W + GAME_GAP) * k, (LIST_ART_H - GAME_H) // 2 * k, GAME_W * k, GAME_H * k), art)
+            else:
+                art = self.art.game_thumb(game, LIST_ART_W * k, LIST_ART_H * k)
+                p.drawPixmap(QRect(0, 0, LIST_ART_W * k, LIST_ART_H * k), art)   # 크기를 정해 그린다(그림의 배율과 상관없이)
             p.end()
-            pm.setDevicePixelRatio(2.0)
+            pm.setDevicePixelRatio(k)
             self.icons[key] = QIcon(pm)
         return self.icons[key]
 
@@ -270,7 +280,7 @@ class RecordTable(QObject):
                 it = QTableWidgetItem(str(val))
                 it.setForeground(QColor(color))
                 if c == 0:
-                    it.setIcon(self._icon(r.get("game", "")))
+                    it.setIcon(self._icon(r.get("game", ""), thumbs.find(r.get("path"))))
                 if c == 3 and st_sub:
                     it.setData(SUBTEXT, st_sub)
                 t.setItem(i, c, it)
@@ -321,6 +331,7 @@ class Card(QWidget):
         self.progress = 0.0
         self.up = svc.uploader if svc is not None else None
         self.exists = has_original(rec) if rec else False     # 그릴 때마다 파일을 확인하지 않게 만들 때 한 번
+        self.thumb = thumbs.find(rec.get("path")) if rec else None
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setCursor(Qt.CursorShape.PointingHandCursor if rec else Qt.CursorShape.ArrowCursor)
         self._scaled = None
@@ -328,15 +339,28 @@ class Card(QWidget):
     def game(self):
         return (self.rec or {}).get("game") if self.rec else self.live.game
 
+    def _shot(self):
+        """큰 그림으로 쓸 영상 장면 파일: 녹화 중이면 가장 최근 장면, 아니면 녹화본 썸네일. 없으면 None."""
+        if self.live:
+            return thumbs.latest_live()
+        return self.thumb
+
     def _image(self, w, h):
-        if self._scaled is None or self._scaled.width() != int(w * self.devicePixelRatioF()):
-            pm = self.art.record_image(self.game())
-            ratio = self.devicePixelRatioF()
-            s = pm.scaled(int(w * ratio), int(h * ratio), Qt.AspectRatioMode.IgnoreAspectRatio,
-                          Qt.TransformationMode.SmoothTransformation)
-            s.setDevicePixelRatio(ratio)
-            self._scaled = s
-        return self._scaled
+        ratio = self.devicePixelRatioF()
+        src = self._shot()
+        key = (int(w * ratio), src, os.path.getmtime(src) if src and os.path.exists(src) else 0)
+        if self._scaled is None or self._scaled[0] != key:
+            pm = cover(QPixmap(src), int(w * ratio), int(h * ratio)) if src else None
+            if pm is None:
+                pm = self.art.record_image(self.game()).scaled(int(w * ratio), int(h * ratio), Qt.AspectRatioMode.IgnoreAspectRatio,
+                                                               Qt.TransformationMode.SmoothTransformation)
+                src = None
+            pm.setDevicePixelRatio(ratio)
+            self._scaled = (key, pm, src is not None)
+        return self._scaled[1]
+
+    def _has_shot(self):
+        return bool(self._scaled and self._scaled[2])
 
     @staticmethod
     def _chip(p, x, y, text, fg, bg, icon_name=None, icon_color=None, right=False):
@@ -410,8 +434,15 @@ class Card(QWidget):
         p.setFont(title)
         p.setPen(QColor(C["text"]))
         fm = QFontMetrics(title)
-        p.drawText(QRectF(0, th + 8, w, 22), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                   fm.elidedText(self.game() or "", Qt.TextElideMode.ElideRight, w))
+        tx = 0
+        if self._has_shot():               # 큰 그림이 영상 장면이면 게임 그림을 제목 앞에 작게
+            gh = 22
+            gw = round(gh * CARD_W / CARD_H)
+            p.drawPixmap(QRectF(0, th + 8, gw, gh), self.art.game_thumb(self.game(), gw * 2, gh * 2),
+                         QRectF(0, 0, gw * 2, gh * 2))
+            tx = gw + 8
+        p.drawText(QRectF(tx, th + 8, w - tx, 22), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                   fm.elidedText(self.game() or "", Qt.TextElideMode.ElideRight, w - tx))
         meta = QFont(self.font())
         meta.setPixelSize(12)
         p.setFont(meta)

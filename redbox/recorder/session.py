@@ -8,6 +8,7 @@
 import os
 import time
 
+from .. import thumbs
 from ..detect import win32
 from . import files, naming
 from .obs import Obs, window_value
@@ -44,6 +45,7 @@ class Recorder:
         self.log = log
         self.on_finished = on_finished   # (경로, 게임, 길이) 녹화가 끝나 파일이 정리되면 부른다
         self.obs = Obs(cfg["obs"])
+        self.shooter = thumbs.Shooter(log)      # 녹화 중 장면을 찍어 두었다가 녹화본 썸네일로
         self.connected = False
         self.down_since = None
         self.next_try = 0
@@ -132,6 +134,8 @@ class Recorder:
                 self.stop()
             else:
                 self._heal_window(now)
+                if self.session and self.session.confirmed:
+                    self.shooter.tick(self.obs, now)
         if not self.session:
             cand = self._pick(decisions, now)
             if cand:
@@ -173,6 +177,7 @@ class Recorder:
         s.deadline = s.start + WINDOW_FIND_TIMEOUT
         s.next_check = s.start + WINDOW_RECHECK_SECONDS
         self.session = s
+        self.shooter.begin(s.start)
         self.log(f"캡처 대상 지정: {target or '(창 찾는 중)'}")
         self.log(f"녹화 시작: {d.exe.lower()} -> {folder}")
         self.log(f"  감지 근거: {d.reason}, 게임: {d.name}")
@@ -206,6 +211,7 @@ class Recorder:
                 if files.remove_with_retry(new):
                     self.log(f"  [폐기] 창 없이 {duration:.0f}초 만에 끝난 실행이라 영상 삭제: {os.path.basename(new)}")
                 new = None
+        self.shooter.finish(new, duration)
         self._reset_dir()
         self._sweep(time.time(), force=True)
         if new and self.on_finished:
@@ -225,6 +231,7 @@ class Recorder:
     def abort(self):
         """창을 끝내 못 찾은 녹화를 멈추고 검은 화면뿐인 파일을 지운다."""
         s, self.session = self.session, None
+        self.shooter.cancel()
         path = self.obs.stop()
         if path and files.remove_with_retry(path):
             self.log(f"  검은 화면 녹화 파일 삭제: {os.path.basename(path)}")
