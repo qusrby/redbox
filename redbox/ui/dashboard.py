@@ -301,7 +301,7 @@ class DashboardPage(QWidget):
         with store.lock:
             recs = sorted(store.data["recordings"].values(), key=lambda r: r.get("added_at", ""), reverse=True)[:self.fit]
         cur = uploading_rec(store)
-        sig = [(r.get("path"), r.get("status"), r.get("cleaned_up"), r is cur) for r in recs]
+        sig = [(r.get("path"), r.get("status"), r.get("cleaned_up"), r.get("processing_ok"), r is cur) for r in recs]
         if sig == self._sig:
             self.recent.update_progress()
             return

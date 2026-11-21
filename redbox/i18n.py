@@ -115,6 +115,7 @@ T = {
     "up.st.done": ("업로드 완료", "Uploaded"),
     "up.st.skipped": ("업로드 제외", "Skipped"),
     "orig.kept": ("원본 보관 중", "Original kept"),
+    "orig.processing": ("유튜브 처리 대기", "YouTube processing"),
     "orig.cleaned": ("원본 정리됨", "Original removed"),
     "orig.deleted": ("원본 삭제됨", "Original deleted"),
     "orig.missing": ("원본 없음", "Original missing"),

@@ -58,8 +58,10 @@ def has_original(r):
 
 
 def original_state(r, exists=None):
-    """(문구, 색) 원본 파일이 지금 PC 에 있는지."""
+    """(문구, 색) 원본 파일이 지금 PC 에 있는지. 올린 뒤 유튜브 처리를 기다리는 동안은 처리 대기(끝나면 정리된다)."""
     if has_original(r) if exists is None else exists:
+        if r.get("status") == "uploaded" and not r.get("processing_ok"):
+            return tr("orig.processing"), C["text2"]
         return tr("orig.kept"), C["accent"]
     st = r.get("status")
     if st == "uploaded":
@@ -122,7 +124,7 @@ class RecordTable(QObject):
                                {1: fm.horizontalAdvance("2026-00-00 00:00") + 48, 2: fm.horizontalAdvance(fmt_len(36000 + 3599)) + 44,
                                 3: max(widest(("up.st.waiting", "up.st.done", "up.st.skipped"), "col.upload"),
                                        fm.horizontalAdvance(tr("up.st.busy") + " 100%") + 44),
-                                4: widest(("orig.kept", "orig.cleaned", "orig.deleted", "orig.missing"), "col.original")})
+                                4: widest(("orig.kept", "orig.processing", "orig.cleaned", "orig.deleted", "orig.missing"), "col.original")})
         t.setIconSize(QSize(LIST_ART_W + ART_GAP, LIST_ART_H))      # 게임 칸 앞의 작은 게임 그림(+ 여백)
         t.verticalHeader().setDefaultSectionSize(ROW_H)
         t.cellClicked.connect(lambda r, _c: self._rec(r) and open_record(self._rec(r), self.parent_widget))
@@ -560,7 +562,7 @@ class VideosPage(QWidget):
             not self.query or self.query in (live.game or "").lower())
         cur = uploading_rec(store)
         sig = (self.filter, self.query, self.view, id(live) if show_live else None, id(cur) if cur else None,
-               [(k, r.get("status"), r.get("cleaned_up"), has_original(r)) for k, r in shown])
+               [(k, r.get("status"), r.get("cleaned_up"), r.get("processing_ok"), has_original(r)) for k, r in shown])
         if sig == self._sig:
             return
         self._sig = sig
