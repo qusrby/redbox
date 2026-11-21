@@ -30,6 +30,8 @@ def _set(w, text=None, css=None):
 class Hero(QFrame):
     """지금 상태 칸. 녹화 중이면 그 게임의 스팀 배경 그림을 깔고 빨간 표시."""
 
+    SHADE = ((0, 195), (0.45, 95), (1, 0))         # 왼쪽부터 덮는 바탕색의 진하기(위치, 알파)
+
     def __init__(self, art):
         super().__init__()
         self.setObjectName("hero")
@@ -89,7 +91,7 @@ class Hero(QFrame):
             p.drawPixmap(0, 0, bg)
             g = QLinearGradient(0, 0, self.width(), 0)       # 글자가 읽히게 왼쪽을 바탕색으로 덮는다
             base = QColor(C["bg"])
-            for pos, alpha in ((0, 235), (0.55, 175), (1, 70)):
+            for pos, alpha in self.SHADE:
                 c = QColor(base)
                 c.setAlpha(alpha)
                 g.setColorAt(pos, c)
