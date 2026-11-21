@@ -5,11 +5,10 @@
 status: waiting(대기) / uploaded(올라감) / excluded(짧아서 제외) / auto_deleted(짧아서 삭제) / missing(파일 없음)
 """
 import datetime
-import json
 import os
 import threading
 
-from .. import paths
+from .. import paths, safefile
 
 
 def file_key(path):
@@ -32,8 +31,7 @@ class Store:
 
     def _load(self):
         try:
-            with open(self.path, encoding="utf-8") as f:
-                d = json.load(f)
+            d = safefile.read_json(self.path)
         except (OSError, ValueError):
             d = {}
         for k, v in (("recordings", {}), ("uploads", {"date": "", "count": 0}), ("playlists", {})):
@@ -42,10 +40,7 @@ class Store:
 
     def save(self):
         with self.lock:
-            tmp = self.path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=1)
-            os.replace(tmp, self.path)
+            safefile.write_json(self.path, self.data, indent=1)
 
     # -- 녹화 ----------------------------------------------------------------------------------
     def add_recording(self, path, game, duration):

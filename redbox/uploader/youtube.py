@@ -3,7 +3,7 @@
 import os
 import shutil
 
-from .. import paths
+from .. import paths, safefile
 
 SCOPES = ["https://www.googleapis.com/auth/youtube"]   # 업로드, 조회, 재생목록, 삭제
 
@@ -36,10 +36,7 @@ def has_secret():
 
 
 def _save(creds):
-    tmp = token_file() + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(creds.to_json())
-    os.replace(tmp, token_file())
+    safefile.write_text(token_file(), creds.to_json())
 
 
 def credentials(interactive=False, force=False):
@@ -51,8 +48,8 @@ def credentials(interactive=False, force=False):
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     creds = None
-    if os.path.exists(token_file()) and not force:
-        creds = Credentials.from_authorized_user_file(token_file(), SCOPES)
+    if safefile.exists(token_file()) and not force:
+        creds = Credentials.from_authorized_user_info(safefile.read_json(token_file()), SCOPES)
     if creds and creds.valid:
         return creds
     if creds and creds.expired and creds.refresh_token:
@@ -114,20 +111,53 @@ def signature():
 
 
 # -- API 호출 -----------------------------------------------------------------------------------
-def upload(svc, path, title, privacy, description="", tags=None, category="20", progress=None):
+def upload(svc, path, title, privacy, description="", tags=None, category="20", progress=None,
+           resume_uri=None, on_session=None):
+    """영상을 올리고 video_id 를 돌려준다.
+    resume_uri 를 주면 그 업로드 세션의 끊긴 지점부터 이어 올린다(세션이 만료됐으면 처음부터).
+    on_session(uri) 는 업로드 세션이 생기면 불린다(앱이 꺼졌다 켜져도 이어 올릴 수 있게 저장해 둔다)."""
+    from googleapiclient.errors import HttpError
     from googleapiclient.http import MediaFileUpload
     body = {
         "snippet": {"title": title[:100], "description": description, "tags": tags or [], "categoryId": str(category)},
         "status": {"privacyStatus": privacy, "selfDeclaredMadeForKids": False},
     }
-    media = MediaFileUpload(path, chunksize=8 * 1024 * 1024, resumable=True)
-    req = svc.videos().insert(part="snippet,status", body=body, media_body=media)
-    resp = None
+
+    def request():
+        media = MediaFileUpload(path, chunksize=8 * 1024 * 1024, resumable=True)
+        return svc.videos().insert(part="snippet,status", body=body, media_body=media)
+
+    req = request()
+    if resume_uri:
+        req.resumable_uri = resume_uri
+        req._in_error_state = True        # 첫 요청에서 서버가 어디까지 받았는지 먼저 묻는다
+    told, first, resp = resume_uri, True, None
     while resp is None:
-        status, resp = req.next_chunk()
-        if status and progress:
-            progress(status.progress())
+        try:
+            status, resp = req.next_chunk()
+        except HttpError as e:
+            if not (first and resume_uri and _status(e) in (400, 404, 410)):
+                raise
+            req = request()                # 세션이 만료됨 -> 처음부터
+        else:
+            if status and progress:
+                progress(status.progress())
+        first = False
+        if on_session and req.resumable_uri and req.resumable_uri != told:
+            told = req.resumable_uri
+            on_session(told)
     return resp["id"]
+
+
+def _status(e):
+    return getattr(getattr(e, "resp", None), "status", None)
+
+
+def upload_status(svc, video_id):
+    """영상의 업로드 상태(uploaded, processed, failed, rejected, deleted). 채널에 없으면 None."""
+    r = svc.videos().list(part="status", id=video_id).execute()
+    items = r.get("items", [])
+    return items[0].get("status", {}).get("uploadStatus") if items else None
 
 
 def find_playlist(svc, title):

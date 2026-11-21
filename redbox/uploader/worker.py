@@ -36,6 +36,22 @@ def _hours_since(s):
     return (now - dt).total_seconds() / 3600
 
 
+def _stamp(path):
+    """파일이 그대로인지 알아보는 값(크기, 수정 시각). 이어 올리기 전에 파일이 바뀌지 않았는지 본다."""
+    try:
+        st = os.stat(path)
+        return [st.st_size, int(st.st_mtime)]
+    except OSError:
+        return None
+
+
+def _is_today(s):
+    dt = _parse_time(s)
+    if dt is None:
+        return False
+    return (dt.astimezone().date() if dt.tzinfo else dt.date()) == datetime.date.today()
+
+
 def _http_status(e):
     return getattr(getattr(e, "resp", None), "status", None)
 
@@ -118,8 +134,9 @@ class Uploader(threading.Thread):
         if svc is None:
             return False
         if not self._recovered:
-            self.recover_interrupted(svc)
-            self._recovered = True
+            self._recovered = self.recover_interrupted(svc)
+            if not self._recovered:
+                return False               # 채널을 못 읽음 -> 다음 바퀴에 다시(다른 파일을 먼저 올리지 않는다)
         self.cleanup(svc)
         return self.upload_next(svc)
 
@@ -351,12 +368,22 @@ class Uploader(threading.Thread):
             self.log(f"  [경고] 채널에 같은 제목의 영상이 이미 있음 -> 다시 올리지 않고 그 영상으로 기록: {rec['name']}")
             self.store.update(key, status="uploaded", video_id=vid, url=f"https://youtu.be/{vid}",
                               uploaded_at=published, reason="duplicate_title")
+            self._forget_resume(key)
             self.add_playlist(svc, rec.get("game"), vid)
             return True
         size = os.path.getsize(path) / 1024 / 1024
-        self.log(f"  업로드 시작: {rec['name']} ({size:.1f}MB)")
+        stamp = _stamp(path)
+        res = self.store.data.get("resume") or {}
+        resume = res.get("uri") if res.get("key") == key and res.get("stamp") == stamp else None
+        if resume:
+            self.log(f"  업로드 이어서: {rec['name']} ({size:.1f}MB, 끊긴 지점부터)")
+        else:
+            self.log(f"  업로드 시작: {rec['name']} ({size:.1f}MB)")
         self.store.set("in_progress", {"key": key, "title": title})
         last = [-10]
+
+        def session(uri):
+            self.store.set("in_progress", {"key": key, "title": title, "uri": uri, "stamp": stamp})
 
         def prog(p):
             self.progress = (rec["name"], p)
@@ -367,8 +394,12 @@ class Uploader(threading.Thread):
 
         try:
             vid = self.yt.upload(svc, path, title, self.up.get("privacy", "private"), self.up.get("description", ""),
-                                 self.up.get("tags", []), self.up.get("category", "20"), prog)
+                                 self.up.get("tags", []), self.up.get("category", "20"), prog,
+                                 resume_uri=resume, on_session=session)
         except Exception as e:
+            info = self.store.data.get("in_progress") or {}
+            if info.get("uri"):
+                self.store.set("resume", info)      # 다음에 올릴 때 끊긴 지점부터
             self.store.set("in_progress", None)
             self.progress = None
             if "quota" in str(e).lower():
@@ -380,6 +411,7 @@ class Uploader(threading.Thread):
             self.log(f"  [실패] {rec['name']}: {e}")
             return False
         self.store.set("in_progress", None)
+        self._forget_resume(key)
         self.progress = None
         self.store.update(key, status="uploaded", video_id=vid, url=f"https://youtu.be/{vid}", uploaded_at=now_iso())
         self.store.bump_uploads()
@@ -409,23 +441,52 @@ class Uploader(threading.Thread):
         except Exception as e:
             self.log(f"  [오류] 재생목록 추가 실패({game}): {e}")
 
+    def _forget_resume(self, key):
+        if (self.store.data.get("resume") or {}).get("key") == key:
+            self.store.set("resume", None)
+
     def recover_interrupted(self, svc):
-        """지난번 업로드 도중 꺼졌으면 서버에 반쯤 올라간 영상을 지우고 그 파일을 먼저 다시 올린다."""
+        """지난번 업로드 도중 꺼졌으면(PC 종료, 앱 종료, 튕김) 그 파일을 먼저 처리한다. 처리했으면 True,
+        채널을 못 읽어 다음에 다시 해야 하면 False.
+        - 채널에 다 올라가 있으면(올리기는 끝났는데 기록하기 직전에 꺼짐) 다시 올리지 않고 올린 것으로 기록한다.
+        - 덜 올라갔으면 끊긴 지점부터 이어 올린다(세션을 저장하기 전이었거나 만료됐으면 처음부터)."""
         info = self.store.data.get("in_progress")
         if not info:
-            return
-        self.store.set("in_progress", None)
+            return True
         key = info.get("key")
         rec = self.store.get(key) if key else None
-        if not rec or not os.path.exists(rec.get("path") or key):
-            return
-        self.log(f"  [복구] 지난번 업로드 도중 중단된 파일 -> 서버 잔재 확인 후 먼저 다시 올림: {rec['name']}")
-        existing = self.yt.channel_titles(svc) or {}
-        if info.get("title") in existing:
+        if not rec or rec.get("status") != "waiting" or not os.path.exists(rec.get("path") or key):
+            self.store.set("in_progress", None)
+            return True
+        title = info.get("title")
+        existing = self.yt.channel_titles(svc)
+        if existing is None:
+            self.log_once("recover", "  [복구] 채널 영상 목록을 읽지 못함 -> 잠시 뒤 다시 확인")
+            return False
+        self._titles = (0, None)
+        if title in existing:
+            vid, published = existing[title]
+            st = self.yt.upload_status(svc, vid)
+            if st in ("uploaded", "processed"):
+                self.store.set("in_progress", None)
+                self.store.update(key, status="uploaded", video_id=vid, url=f"https://youtu.be/{vid}",
+                                  uploaded_at=published or now_iso())
+                if _is_today(published):
+                    self.store.bump_uploads()
+                self._forget_resume(key)
+                self.log(f"  [복구] 지난번 업로드는 끝났고 기록 전에 꺼짐 -> 다시 올리지 않고 기록: {rec['name']}")
+                self.add_playlist(svc, rec.get("game"), vid)
+                return True
             try:
-                self.yt.delete(svc, existing[info["title"]][0])
-                self.log("  [복구] 불완전하게 남은 서버 영상 삭제")
+                self.yt.delete(svc, vid)
+                self.log(f"  [복구] 채널에 불완전하게 남은 영상({st}) 삭제")
             except Exception as e:
                 self.log(f"  [복구] 서버 영상 삭제 중 오류(이미 없을 수 있음): {e}")
-        self._titles = (0, None)
+        self.store.set("in_progress", None)
+        if info.get("uri"):
+            self.store.set("resume", info)
+            self.log(f"  [복구] 지난번 업로드 도중 중단 -> 끊긴 지점부터 먼저 이어 올림: {rec['name']}")
+        else:
+            self.log(f"  [복구] 지난번 업로드 도중 중단 -> 먼저 다시 올림: {rec['name']}")
         self.store.set("priority", key)
+        return True

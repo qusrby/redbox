@@ -1,9 +1,8 @@
 """설정 읽기와 저장. 파일에 없는 항목은 기본값을 쓴다(새 버전에서 항목이 늘어도 그대로 동작)."""
 import copy
-import json
 import os
 
-from . import APP_NAME, paths
+from . import APP_NAME, paths, safefile
 
 UPLOAD_DAILY_MAX = 100   # 유튜브 API 업로드 한도: 구글 프로젝트당 하루 100개
 
@@ -73,12 +72,11 @@ def _merge(base, over):
 
 def load():
     try:
-        with open(paths.config_file(), encoding="utf-8") as f:
-            raw = json.load(f)
+        raw = safefile.read_json(paths.config_file())
         cfg = _merge(DEFAULTS, raw)
         if "setup_done" not in raw:      # 안내가 생기기 전부터 쓰던 사용자
             cfg["setup_done"] = True
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         cfg = copy.deepcopy(DEFAULTS)
     if not cfg["recording"]["video_root"]:
         cfg["recording"]["video_root"] = os.path.join(paths.videos_dir(), APP_NAME)
@@ -91,8 +89,4 @@ def load():
 
 
 def save(cfg):
-    path = paths.config_file()
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    safefile.write_json(paths.config_file(), cfg, indent=2)
