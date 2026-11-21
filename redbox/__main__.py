@@ -9,7 +9,7 @@
 import argparse
 import sys
 
-from . import APP_NAME, VERSION, config, paths
+from . import APP_NAME, FULL_VERSION, config, paths
 
 
 def _out(text):
@@ -22,7 +22,7 @@ def cmd_scan(_args):
     from .detect import Catalog
     cfg = config.load()
     cat = Catalog(cfg["detection"])
-    _out(f"{APP_NAME} {VERSION}  데이터 폴더: {paths.data_dir()}")
+    _out(f"{APP_NAME} {FULL_VERSION}  데이터 폴더: {paths.data_dir()}")
     from .detect.catalog import source_name
     for kind, n in cat.counts.items():
         _out(f"  {source_name(kind):16s} {n}")

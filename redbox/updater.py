@@ -5,7 +5,7 @@ import threading
 import time
 import urllib.request
 
-from . import APP_NAME, VERSION
+from . import APP_NAME, FULL_VERSION, VERSION
 
 REPO = "qusrby/redbox"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
@@ -20,7 +20,7 @@ def parse(text):
 
 def latest(timeout=10):
     """최신 릴리스 (버전 문자열, 페이지 주소). 못 읽으면 None(저장소가 비공개거나 인터넷이 끊긴 경우 등)."""
-    req = urllib.request.Request(API, headers={"User-Agent": f"{APP_NAME}/{VERSION}",
+    req = urllib.request.Request(API, headers={"User-Agent": f"{APP_NAME}/{FULL_VERSION}",
                                                "Accept": "application/vnd.github+json"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

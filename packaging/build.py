@@ -5,6 +5,7 @@
   python packaging/build.py --no-setup exe 만
 
 결과: dist/Redbox/Redbox.exe, dist/Redbox-Setup-<버전>.exe
+앱과 윈도우 앱 목록에 보이는 버전은 <버전>.<저장소 전체 커밋 수>(예: 1.0.1.13), 설치 파일 이름은 <버전>.
 설치 파일은 Inno Setup 6 의 ISCC.exe 가 필요하다(없으면 exe 까지만 만든다)."""
 import glob
 import os
@@ -52,7 +53,26 @@ def prune(app_dir):
             os.remove(p)
 
 
-def build_exe(icon):
+BUILD_FILE = os.path.join(ROOT, "redbox", "_build.py")
+
+
+def commit_count():
+    out = subprocess.run(["git", "rev-list", "--count", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True)
+    return int(out.stdout.strip())
+
+
+def build_exe(icon, build):
+    """build(저장소 전체 커밋 수)를 exe 안에 넣는다. 소스 폴더에는 남기지 않는다(소스 실행은 git 에서 읽음)."""
+    with open(BUILD_FILE, "w", encoding="utf-8") as f:
+        f.write(f"BUILD = {build}\n")
+    try:
+        _run_pyinstaller(icon)
+    finally:
+        os.remove(BUILD_FILE)
+    return os.path.join(DIST, "Redbox", "Redbox.exe")
+
+
+def _run_pyinstaller(icon):
     import PyInstaller.__main__
     fonts = os.path.join(ROOT, "redbox", "assets", "fonts")
     shutil.rmtree(os.path.join(DIST, "Redbox"), ignore_errors=True)
@@ -62,23 +82,23 @@ def build_exe(icon):
         "--add-data", f"{fonts}{os.pathsep}redbox/assets/fonts",
         "--add-data", f"{youtube_doc()}{os.pathsep}googleapiclient/discovery_cache/documents",
         "--exclude-module", "numpy",
+        "--hidden-import", "redbox._build",
         "--distpath", DIST, "--workpath", WORK, "--specpath", WORK,
         os.path.join(ROOT, "Redbox.pyw"),
     ])
     prune(os.path.join(DIST, "Redbox"))
     for f in ("LICENSE", "THIRD_PARTY_LICENSES.md"):
         shutil.copy(os.path.join(ROOT, f), os.path.join(DIST, "Redbox", f))
-    return os.path.join(DIST, "Redbox", "Redbox.exe")
 
 
-def build_setup(version):
+def build_setup(version, full):
     iscc = find_iscc()
     if not iscc:
         print("ISCC.exe 를 찾지 못해 설치 파일은 건너뜀(Inno Setup 6 설치 또는 ISCC 환경 변수)")
         return None
     for old in glob.glob(os.path.join(DIST, "Redbox-Setup-*.exe")):
         os.remove(old)
-    subprocess.run([iscc, f"/DAppVersion={version}", f"/DSourceDir={os.path.join(DIST, 'Redbox')}",
+    subprocess.run([iscc, f"/DAppVersion={full}", f"/DSetupVersion={version}", f"/DSourceDir={os.path.join(DIST, 'Redbox')}",
                     f"/DOutputDir={DIST}", os.path.join(PKG, "redbox.iss")], check=True)
     return os.path.join(DIST, f"Redbox-Setup-{version}.exe")
 
@@ -87,10 +107,12 @@ def main():
     from redbox import VERSION
     from make_icon import main as make_icon
     icon = make_icon()
-    exe = build_exe(icon)
-    print("exe:", exe)
+    build = commit_count()
+    full = f"{VERSION}.{build}"
+    exe = build_exe(icon, build)
+    print("exe:", exe, full)
     if "--no-setup" not in sys.argv:
-        setup = build_setup(VERSION)
+        setup = build_setup(VERSION, full)
         if setup:
             print("setup:", setup)
 

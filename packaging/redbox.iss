@@ -5,6 +5,9 @@
 #ifndef AppVersion
   #define AppVersion "1.0.1"
 #endif
+#ifndef SetupVersion
+  #define SetupVersion AppVersion
+#endif
 #ifndef SourceDir
   #define SourceDir "..\dist\Redbox"
 #endif
@@ -26,7 +29,7 @@ DisableProgramGroupPage=yes
 DisableDirPage=yes
 PrivilegesRequired=lowest
 OutputDir={#OutputDir}
-OutputBaseFilename=Redbox-Setup-{#AppVersion}
+OutputBaseFilename=Redbox-Setup-{#SetupVersion}
 SetupIconFile=redbox.ico
 UninstallDisplayIcon={app}\Redbox.exe
 UninstallDisplayName=Redbox

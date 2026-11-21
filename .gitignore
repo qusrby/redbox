@@ -8,3 +8,4 @@ dist/
 .venv/
 venv/
 packaging/redbox.ico
+redbox/_build.py

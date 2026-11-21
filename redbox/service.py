@@ -6,7 +6,7 @@ import threading
 import time
 import zlib
 
-from . import APP_ID, APP_NAME, VERSION, paths
+from . import APP_ID, APP_NAME, FULL_VERSION, paths
 from .detect import Detector, win32
 from .detect.catalog import source_name
 from .recorder import Recorder
@@ -109,7 +109,7 @@ class Service:
         win32.set_dpi_aware()
         c = self.detector.catalog
         self.log("=" * 60)
-        self.log(f"{APP_NAME} {VERSION} 시작. 영상 폴더: {self.recorder.video_root()}")
+        self.log(f"{APP_NAME} {FULL_VERSION} 시작. 영상 폴더: {self.recorder.video_root()}")
         self.log("모은 게임 목록: " + ", ".join(f"{source_name(k)} {v}" for k, v in c.counts.items()))
         if os.path.exists(self.stop_flag):
             os.remove(self.stop_flag)

@@ -5,7 +5,7 @@ import threading
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 
-from .. import APP_NAME, VERSION, config, paths, startup
+from .. import APP_NAME, FULL_VERSION, config, paths, startup
 from ..i18n import tr
 from ..uploader import youtube
 from .widgets import (Check, Combo, KeepControl, SmoothWheel, button, open_target, section, setting_row, spin,
@@ -106,7 +106,7 @@ class SettingsPage(QScrollArea):
         self.update_btn = button(tr("update.download"), self._open_update, primary=True)
         self.update_btn.hide()
         fl.addWidget(self.update_btn)
-        self.about_row = setting_row(f"{APP_NAME} {VERSION}", tr("app.tagline"), folders)
+        self.about_row = setting_row(f"{APP_NAME} {FULL_VERSION}", tr("app.tagline"), folders)
         self.about_desc = self.about_row.findChild(QLabel, "rowdesc")
         v.addLayout(section(tr("set.about"), [self.about_row]))
         v.addStretch(1)
