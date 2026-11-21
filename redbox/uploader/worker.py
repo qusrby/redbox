@@ -56,6 +56,7 @@ class Uploader(threading.Thread):
         self._titles = (0, None)
         self._recovered = False
         self._once = {}
+        self._rules_lock = threading.Lock()     # 길이 규칙은 업로드 스레드와 녹화 쪽(apply_rules_now)에서 같이 부른다
 
     # -- 설정 도우미 -----------------------------------------------------------------------------
     @property
@@ -84,6 +85,14 @@ class Uploader(threading.Thread):
     def nudge(self):
         """녹화가 하나 끝났을 때 기다리지 말고 바로 한 바퀴 돌게 한다."""
         self.wake.set()
+
+    def apply_rules_now(self):
+        """녹화가 끝나자마자 길이 규칙(자동 삭제, 업로드 제외)을 맞춘다.
+        업로드 스레드는 큰 영상을 올리는 동안 다음 바퀴로 못 가므로, 그동안 짧은 영상이 '업로드 대기'로 남지 않게."""
+        try:
+            self.apply_length_rules(bool(self.up.get("enabled")))
+        except Exception as e:
+            self.log(f"[길이 규칙 오류] {type(e).__name__}: {e}")
 
     def run(self):
         while not self.stop_event.is_set():
@@ -156,6 +165,10 @@ class Uploader(threading.Thread):
 
     # -- 2. 길이 규칙 ----------------------------------------------------------------------------
     def apply_length_rules(self, upload_on=True):
+        with self._rules_lock:
+            self._apply_length_rules(upload_on)
+
+    def _apply_length_rules(self, upload_on):
         for key, rec in self.store.waiting():
             path = rec.get("path") or key
             if not os.path.exists(path):

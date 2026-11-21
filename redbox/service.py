@@ -80,6 +80,7 @@ class Service:
     def on_recording_finished(self, path, game, duration):
         """녹화가 끝나 이름까지 정리된 파일을 업로드 대기열에 넣는다."""
         if self.store.add_recording(path, game, duration):
+            self.uploader.apply_rules_now()
             self.uploader.nudge()
 
     def _check_obs(self):
