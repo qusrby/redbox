@@ -3,14 +3,14 @@ import datetime
 import time
 
 from PyQt6.QtCore import QEvent, QRectF, Qt
-from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPixmap
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ..i18n import tr
 from .art import cover
 from .style import C
 from .videos import RecordTable, ROW_H, uploading_rec
-from .widgets import Dot, fmt_len, fmt_time, label
+from .widgets import Dot, fmt_elapsed, fmt_time, label, tabular
 
 HEAD_H = 36            # 표 머리줄 높이
 
@@ -45,6 +45,10 @@ class Hero(QFrame):
         top.addWidget(self.state)
         top.addStretch(1)
         self.timer = label("", "herotime")
+        f = tabular(self.timer.font())            # 글꼴은 여기서(스타일 시트로 주면 고정폭 숫자 설정이 빠진다)
+        f.setPixelSize(20)
+        f.setWeight(QFont.Weight.Bold)
+        self.timer.setFont(f)
         top.addWidget(self.timer, 0, Qt.AlignmentFlag.AlignVCenter)
         v.addLayout(top)
         v.addStretch(1)
@@ -125,7 +129,7 @@ class DashboardPage(QWidget):
         self._sig = None
         self.fit = 1                     # 창 높이에 들어가는 최근 영상 줄 수
         v = QVBoxLayout(self)
-        v.setContentsMargins(32, 0, 32, 24)
+        v.setContentsMargins(32, 0, 32, 0)
         v.setSpacing(16)
         self.hero = Hero(art)
         v.addWidget(self.hero)
@@ -172,7 +176,7 @@ class DashboardPage(QWidget):
         if s:
             color, state, big = C["rec"], tr("state.recording"), s.game
             meta = tr("dash.started").format(t=fmt_time(datetime.datetime.fromtimestamp(s.start)))
-            _set(h.timer, fmt_len(now - s.start))
+            _set(h.timer, fmt_elapsed(now - s.start))
             h.timer.show()
             h.set_game(s.game)
         else:

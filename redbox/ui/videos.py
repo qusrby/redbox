@@ -13,7 +13,7 @@ from ..i18n import tr
 from . import icons
 from .art import CARD_H, CARD_W
 from .style import C
-from .widgets import (GAUGE, IconButton, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
+from .widgets import (GAUGE, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
                       rec_len, rec_time, table)
 
 GAP = 18
@@ -263,12 +263,12 @@ class Card(QWidget):
         small = QFont(self.font())
         small.setPixelSize(12)
         small.setWeight(QFont.Weight.DemiBold)
-        p.setFont(small)
+        p.setFont(tabular(small))
         dark = QColor(0, 0, 0, 190)
         if self.live:
             elapsed = datetime.datetime.now().timestamp() - self.live.start
             self._chip(p, 10, 10, tr("state.recording"), QColor("#ffffff"), QColor(C["rec"]))
-            self._chip(p, w - 10, th - 32, fmt_len(elapsed), QColor("#ffffff"), dark, right=True)
+            self._chip(p, w - 10, th - 32, fmt_elapsed(elapsed), QColor("#ffffff"), dark, right=True)
             p.setPen(QPen(QColor(C["rec"]), 2))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawRect(QRectF(1, 1, w - 2, th - 2))
@@ -467,7 +467,7 @@ class VideosPage(QWidget):
         holder = QWidget()
         holder.setObjectName("root")
         hl = QVBoxLayout(holder)
-        hl.setContentsMargins(0, 0, 14, 24)
+        hl.setContentsMargins(0, 0, 14, 0)
         hl.addWidget(self.grid)
         hl.addStretch(1)
         self.grid_area.setWidget(holder)
@@ -478,7 +478,7 @@ class VideosPage(QWidget):
         self.table = self.list.table
         tw = QWidget()
         tl = QVBoxLayout(tw)
-        tl.setContentsMargins(0, 0, 0, 24)
+        tl.setContentsMargins(0, 0, 0, 0)
         tl.addWidget(self.table)
         self.stack.addWidget(tw)
         self.empty = Empty()

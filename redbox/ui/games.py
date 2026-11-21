@@ -143,7 +143,7 @@ class GamesPage(QWidget):
         self.list = QWidget()
         self.list.setObjectName("root")
         self.rows = QVBoxLayout(self.list)
-        self.rows.setContentsMargins(0, 0, 0, 24)
+        self.rows.setContentsMargins(0, 0, 0, 0)
         self.rows.setSpacing(0)
         self.area.setWidget(self.list)
         listbox.addWidget(self.area, 1)

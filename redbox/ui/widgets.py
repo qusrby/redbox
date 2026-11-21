@@ -5,7 +5,7 @@ import re
 import subprocess
 
 from PyQt6.QtCore import QElapsedTimer, QEvent, QObject, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (QAbstractButton, QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QFrame,
                              QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView, QPushButton, QSpinBox,
                              QTableWidget, QVBoxLayout, QWidget)
@@ -62,6 +62,24 @@ def fmt_len(sec):
     parts = [tr("time.h").format(v=h) if h else "", tr("time.m").format(v=m) if m else "",
              tr("time.s").format(v=s) if s or not (h or m) else ""]
     return " ".join(p for p in parts if p)
+
+
+def fmt_elapsed(sec):
+    """녹화 경과 시간: 12분 05초처럼 아래 단위를 늘 두 자리로(1초마다 바뀌어도 폭이 그대로)."""
+    sec = int(sec or 0)
+    h, rem = divmod(sec, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{tr('time.h').format(v=h)} {tr('time.m').format(v=f'{m:02d}')} {tr('time.s').format(v=f'{s:02d}')}"
+    if m:
+        return f"{tr('time.m').format(v=m)} {tr('time.s').format(v=f'{s:02d}')}"
+    return tr("time.s").format(v=s)
+
+
+def tabular(font):
+    """숫자 폭을 모두 같게(고정폭 숫자). 1초마다 바뀌는 숫자가 좌우로 흔들리지 않게."""
+    font.setFeature(QFont.Tag("tnum"), 1)
+    return font
 
 
 def fmt_uptime(sec):
@@ -288,6 +306,8 @@ def table(headers, stretch_col=0, widths=None):
     t.setHorizontalHeaderLabels(headers)
     t.verticalHeader().setVisible(False)
     t.setShowGrid(False)
+    t.setWordWrap(False)                  # 긴 게임 이름은 두 줄로 꺾지 않고 줄임표로
+    t.setTextElideMode(Qt.TextElideMode.ElideRight)
     t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
     t.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
     t.setFocusPolicy(Qt.FocusPolicy.NoFocus)

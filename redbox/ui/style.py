@@ -43,7 +43,7 @@ QFrame#hero {{ background: {C['surface']}; }}
 QLabel#herostate {{ font-size: 13px; font-weight: 800; }}
 QLabel#herobig {{ font-size: 26px; font-weight: 700; }}
 QLabel#herometa {{ font-size: 13px; color: {C['text2']}; }}
-QLabel#herotime {{ font-size: 20px; font-weight: 700; color: #ffffff; background: {C['rec']}; padding: 4px 12px; }}
+QLabel#herotime {{ color: #ffffff; background: {C['rec']}; padding: 4px 12px; }}
 QFrame#tile {{ background: {C['surface']}; border: 1px solid {C['border']}; }}
 QLabel#tilename {{ font-size: 12px; color: {C['muted']}; font-weight: 700; }}
 QLabel#tilevalue {{ font-size: 16px; font-weight: 700; }}

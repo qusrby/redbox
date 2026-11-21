@@ -155,7 +155,7 @@ class MainWindow(QWidget):
 
         # 오른쪽: 화면 제목과 창 버튼, 알림 띠, 본문
         right = QVBoxLayout()
-        right.setContentsMargins(0, 0, 0, 0)
+        right.setContentsMargins(0, 0, 0, 32)      # 본문 아래 여백(스크롤 막대도 여기서 끝남) = 왼쪽 여백과 같게
         right.setSpacing(0)
         head = QWidget()
         head.setFixedHeight(68)

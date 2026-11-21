@@ -26,7 +26,7 @@ class SettingsPage(QScrollArea):
         inner = QWidget()
         inner.setObjectName("root")
         outer = QHBoxLayout(inner)
-        outer.setContentsMargins(32, 0, 32, 32)
+        outer.setContentsMargins(32, 0, 32, 0)
         holder = QWidget()
         outer.addWidget(holder, 1)
         self.setWidget(inner)
