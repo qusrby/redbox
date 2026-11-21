@@ -9,6 +9,7 @@ T = {
     "nav.videos": ("영상", "Videos"),
     "dash.recent": ("최근 영상", "Recent videos"),
     "dash.all": ("모두 보기", "View all"),
+    "dash.studio": ("YouTube 스튜디오", "YouTube Studio"),
     "dash.started": ("{t} 시작", "Started {t}"),
     "dash.ready.big": ("게임 대기 중", "Waiting for a game"),
     "dash.paused.big": ("자동 녹화 멈춤", "Auto recording paused"),

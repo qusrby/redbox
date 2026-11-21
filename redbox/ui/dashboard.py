@@ -1,5 +1,6 @@
 """대시보드: 지금 녹화 상태(크게), 앱, OBS Studio, OBS 연결, 유튜브 상태, 최근 영상 몇 개."""
 import datetime
+import threading
 import time
 
 from PyQt6.QtCore import QEvent, QRectF, Qt
@@ -7,10 +8,12 @@ from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPixmap
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from ..i18n import tr
+from ..uploader import youtube
+from . import icons
 from .art import cover
 from .style import C
 from .videos import RecordTable, ROW_H, upload_progress, uploading_rec
-from .widgets import Dot, ElideLabel, fmt_elapsed, fmt_time, label, rec_time, tabular
+from .widgets import Dot, ElideLabel, fmt_elapsed, fmt_time, label, open_target, rec_time, tabular
 
 HEAD_H = 36            # 표 머리줄 높이
 
@@ -172,6 +175,13 @@ class DashboardPage(QWidget):
         head = QHBoxLayout()
         head.addWidget(label(tr("dash.recent"), "h2"))
         head.addStretch(1)
+        studio = QPushButton(tr("dash.studio"))          # 유튜브 스튜디오의 채널 콘텐츠(올린 영상 목록)
+        studio.setObjectName("link")
+        studio.setIcon(icons.icon("external", C["text2"], 14))
+        studio.setCursor(Qt.CursorShape.PointingHandCursor)
+        studio.clicked.connect(self._open_studio)
+        head.addWidget(studio)
+        head.addSpacing(20)
         more = QPushButton(tr("dash.all"))
         more.setObjectName("link")
         more.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -187,6 +197,21 @@ class DashboardPage(QWidget):
         self.empty = label(tr("empty.title"), "muted")
         self.empty.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         v.addWidget(self.empty, 1)
+
+    def _open_studio(self):
+        """채널 ID 를 알면 바로, 모르면 뒤에서 알아낸 뒤 연다(처음 한 번만 걸린다)."""
+        store = self.svc.store
+        cid = store.data.get("channel_id")
+        if cid:
+            open_target(youtube.studio_url(cid))
+            return
+
+        def work():
+            found = youtube.channel_id() if youtube.has_secret() else None
+            if found:
+                store.set("channel_id", found)
+            open_target(youtube.studio_url(found))
+        threading.Thread(target=work, daemon=True, name="studio").start()
 
     def eventFilter(self, obj, ev):
         if obj is self.recent.table and ev.type() == QEvent.Type.Resize:

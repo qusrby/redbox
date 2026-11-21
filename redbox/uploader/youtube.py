@@ -85,6 +85,20 @@ def channel_name():
         return None
 
 
+def channel_id():
+    """로그인한 계정의 유튜브 채널 ID(UC...). 실패하면 None."""
+    try:
+        r = service().channels().list(part="id", mine=True).execute()
+        return r["items"][0]["id"]
+    except Exception:
+        return None
+
+
+def studio_url(cid=None):
+    """유튜브 스튜디오 채널 콘텐츠(동영상) 화면. 채널 ID 를 모르면 지금 로그인한 채널로 가는 주소."""
+    return f"https://studio.youtube.com/channel/{cid or 'UC'}/videos/upload"
+
+
 def service(interactive=False):
     from googleapiclient.discovery import build
     return build("youtube", "v3", credentials=credentials(interactive), cache_discovery=False)
