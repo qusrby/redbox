@@ -234,6 +234,40 @@ def obs_running():
     return False
 
 
+# -- 비정상 종료 확인 창 --------------------------------------------------------------------------
+# OBS 는 켜질 때 .sentinel 폴더에 run_* 표시를 만들고 정상 종료 때 지운다. 켜질 때 지난번 표시가 남아 있으면
+# (PC 가 갑자기 꺼짐 등) '비정상 종료가 감지됨' 창을 띄우고, 누르기 전까지 웹소켓을 열지 않는다.
+OBS_SENTINEL = os.path.join(os.environ.get("APPDATA", ""), "obs-studio", ".sentinel")
+
+
+def crash_marks():
+    try:
+        return [os.path.join(OBS_SENTINEL, f) for f in os.listdir(OBS_SENTINEL) if f.startswith("run_")]
+    except OSError:
+        return []
+
+
+def clear_crash_marks():
+    """남은 run_* 표시를 지운다. OBS 가 꺼져 있을 때만 부른다(켜져 있으면 자기 표시까지 지워짐)."""
+    n = 0
+    for p in crash_marks():
+        try:
+            os.remove(p)
+            n += 1
+        except OSError:
+            pass
+    return n
+
+
+def obs_process():
+    """실행 중인 OBS (pid, 켜진 시각, 실행 파일). 없으면 None."""
+    import psutil
+    for p in psutil.process_iter(["name", "pid", "create_time", "exe"]):
+        if (p.info.get("name") or "").lower() in OBS_NAMES:
+            return p.info["pid"], p.info.get("create_time") or 0, p.info.get("exe")
+    return None
+
+
 def launch_obs(exe):
     """OBS 를 트레이로 켠다. OBS 는 자기 폴더에서 실행해야 설정과 플러그인을 찾는다."""
     import subprocess

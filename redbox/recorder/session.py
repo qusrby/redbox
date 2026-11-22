@@ -53,6 +53,7 @@ class Recorder:
         self.retry_after = {}         # 실행 파일 경로 -> 다시 시도해도 되는 시각
         self.external = False         # 사용자가 직접 켠 녹화가 진행 중
         self.next_sweep = 0
+        self.healed_obs = set()       # 비정상 종료 확인 창에서 멈춰 다시 켜 준 OBS pid(한 번만)
 
     # -- OBS 연결 ------------------------------------------------------------------------------
     def ensure_connected(self):
@@ -67,6 +68,7 @@ class Recorder:
             if self.down_since is None:
                 self.down_since = time.time()
                 self.log(f"OBS 연결 실패({e}) -> OBS 가 켜질 때까지 {OBS_RETRY_SECONDS}초마다 조용히 다시 시도")
+            self._heal_crash_prompt()
             return False
         self.connected = True
         if self.obs.seeded:            # 오디오 설정을 OBS 의 지금 상태로 처음 정했으면 저장
@@ -82,6 +84,36 @@ class Recorder:
             self.log(f"OBS 연결 성공 (캡처 소스: {self.obs.capture})")
         self._adopt_orphan()
         return True
+
+    def _heal_crash_prompt(self):
+        """PC 가 갑자기 꺼진 뒤 OBS 가 '비정상 종료가 감지됨' 창에서 멈춰 연결되지 않으면 알아서 푼다.
+        OBS 가 꺼져 있으면 남은 표시만 지워 두고(나중에 켜질 때 창이 뜨지 않게),
+        켜진 지 30초가 넘었는데 연결이 안 되고 지난번 표시가 남아 있으면 OBS 를 끄고 표시를 지운 뒤 다시 켠다."""
+        from .obs import clear_crash_marks, crash_marks, launch_obs, find_obs, obs_process
+        try:
+            proc = obs_process()
+            if proc is None:
+                if crash_marks() and clear_crash_marks():
+                    self.log("OBS 비정상 종료 표시 정리(다음에 켤 때 확인 창이 뜨지 않게)")
+                return
+            pid, started, exe = proc
+            if pid in self.healed_obs or time.time() - started < 30 or len(crash_marks()) < 2:
+                return
+            self.healed_obs.add(pid)
+            self.log("[복구] OBS 가 비정상 종료 확인 창에서 멈춰 연결되지 않음 -> OBS 를 다시 켬")
+            import psutil
+            p = psutil.Process(pid)
+            p.kill()
+            try:
+                p.wait(10)
+            except psutil.Error:
+                pass
+            clear_crash_marks()
+            exe = exe or find_obs()
+            if exe:
+                launch_obs(exe)
+        except Exception as e:
+            self.log(f"  [복구] OBS 다시 켜기 실패: {e}")
 
     def _drop(self, e):
         self.log(f"[연결 끊김] OBS ({e}) -> 다시 연결 시도")
