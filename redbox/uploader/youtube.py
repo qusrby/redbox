@@ -149,6 +149,23 @@ def upload(svc, path, title, privacy, description="", tags=None, category="20", 
     return resp["id"]
 
 
+def session_state(svc, uri, total):
+    """이어 올리기 세션이 파일을 어디까지 받았는지 서버에 묻는다.
+    ('done', video_id) 다 받음 | ('partial', 받은 바이트) 덜 받음 | ('gone', None) 세션이 없어짐. 연결이 안 되면 예외."""
+    import json
+    resp, content = svc._http.request(uri, method="PUT", body=b"",
+                                      headers={"Content-Length": "0", "Content-Range": f"bytes */{total}"})
+    st = int(resp.status)
+    if st in (200, 201):
+        return "done", json.loads(content or b"{}").get("id")
+    if st == 308:
+        rng = resp.get("range")
+        return "partial", int(rng.rsplit("-", 1)[1]) + 1 if rng else 0
+    if st in (400, 404, 410):
+        return "gone", None
+    raise RuntimeError(f"업로드 세션 확인 응답 {st}")
+
+
 def _status(e):
     return getattr(getattr(e, "resp", None), "status", None)
 
