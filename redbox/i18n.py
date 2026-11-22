@@ -82,6 +82,7 @@ T = {
     "lib.filter.all": ("전체", "All"),
     "lib.filter.waiting": ("업로드 대기", "Waiting"),
     "lib.filter.skipped": ("제외", "Skipped"),
+    "lib.filter.review": ("검토 필요", "Needs review"),
     "lib.empty": ("해당 녹화 없음", "No recordings"),
     "lib.empty.desc": ("다른 필터 또는 검색어 사용", "Try another filter or search"),
     "empty.title": ("녹화 없음", "No recordings yet"),

@@ -50,11 +50,10 @@ QLabel#tilevalue {{ font-size: 16px; font-weight: 700; }}
 QLabel#tilenote {{ font-size: 12px; color: {C['text2']}; }}
 QPushButton#link {{ background: transparent; border: none; color: {C['text2']}; padding: 4px 0; font-weight: 600; }}
 QPushButton#link:hover {{ color: {C['accent']}; }}
-QLabel#rulename {{ background: transparent; font-size: 13px; font-weight: 700; }}
+QLabel#rulestate {{ background: transparent; }}
 QLabel#rulewarn {{ color: {C['warn']}; font-size: 12px; font-weight: 700; background: transparent; }}
-QPushButton#rulebtn {{ background: {C['warn']}; border: 1px solid {C['warn']}; padding: 0 12px; font-size: 12px; font-weight: 700; color: #16171a; }}
-QPushButton#rulebtn:hover {{ background: #f0c96a; border-color: #f0c96a; color: #16171a; }}
-QPushButton#rulebtn:pressed {{ background: {C['warn']}; border-color: #16171a; }}
+QPushButton#rulelink {{ background: transparent; border: none; padding: 2px 0; color: {C['warn']}; font-size: 12px; font-weight: 700; text-decoration: underline; text-align: left; }}
+QPushButton#rulelink:hover {{ color: #f0c96a; }}
 QFrame#banner {{ background: {C['neg_bg']}; border: 1px solid {C['neg_border']}; }}
 QLabel#bannertitle {{ font-weight: 800; color: {C['neg']}; }}
 QLabel#bannerdesc {{ color: {C['text2']}; }}

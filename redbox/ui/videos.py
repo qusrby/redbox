@@ -124,11 +124,11 @@ def record_state(r, busy=False, progress=0.0, up=None, exists=None):
 
 class RuleBar(QWidget):
     """바뀐 길이 규칙 경고와 확인 버튼(누르면 사유를 보여 주고 적용할지 묻는 대화 상자).
-    목록 줄은 게임 이름 아래 줄에(name, left 를 준다), 카드는 그림 아래 끝에 띠로 붙는다.
+    목록 줄은 상태 칸에(위에 상태 글자 name, color, 아래에 경고 표시와 버튼), 카드는 그림 아래 끝에 띠로 붙는다.
     버튼 밖을 누르면 아래(줄, 카드)로 넘겨 평소처럼 영상이 열린다."""
     H = 26
 
-    def __init__(self, svc, key, act, card=False, name=None, left=0):
+    def __init__(self, svc, key, act, card=False, name=None, left=0, color=None):
         super().__init__()
         self.svc, self.key, self.card, self.act = svc, key, card, act
         h = QHBoxLayout()
@@ -136,24 +136,31 @@ class RuleBar(QWidget):
         if card:
             self.setLayout(h)
             h.setContentsMargins(10, 0, 8, 0)
-        else:                              # 표: 위에 게임 이름(칸 글자 대신), 아래에 경고와 버튼
+        else:                              # 표 상태 칸: 위에 상태(칸 글자 대신), 아래에 경고 표시와 버튼
             v = QVBoxLayout(self)
-            v.setContentsMargins(left, 0, 12, 0)
-            v.setSpacing(5)
+            v.setContentsMargins(left, 0, 8, 0)
+            v.setSpacing(4)
             v.addStretch(1)
-            v.addWidget(ElideLabel(name or "", "rulename"))
+            state = ElideLabel(name or "", "rulestate")
+            state.setStyleSheet(f"color: {color or C['text']};")
+            v.addWidget(state)
             v.addLayout(h)
             v.addStretch(1)
-        ic = QLabel()
-        ic.setPixmap(icons.pixmap("warning", C["warn"], 14))
-        h.addWidget(ic)
-        text = ElideLabel(tr(f"rule.{act}"), "rulewarn")      # 좁으면 문구가 먼저 줄어든다(버튼은 그대로)
-        text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)   # 자리가 있으면 글자 길이만큼
-        h.addWidget(text, 1 if card else 0)
-        h.addSpacing(10)
-        b = QPushButton(tr("rule.check"))
-        b.setObjectName("rulebtn")
-        b.setFixedHeight(self.H)
+        # 상자 없는 밑줄 글자 단추(누르면 창이 뜬다는 표시). 카드는 앞에 바뀐 규칙 문구
+        if card:
+            ic = QLabel()
+            ic.setPixmap(icons.pixmap("warning", C["warn"], 14))
+            h.addWidget(ic)
+            text = ElideLabel(tr(f"rule.{act}"), "rulewarn")      # 좁으면 문구가 먼저 줄어든다(단추는 그대로)
+            text.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)   # 자리가 있으면 글자 길이만큼
+            h.addWidget(text, 1)
+            h.addSpacing(10)
+            b = QPushButton(tr("rule.check"))
+        else:                              # 상태 칸은 좁아서 바뀐 규칙 문구는 올렸을 때만
+            self.setToolTip(tr(f"rule.{act}"))
+            b = QPushButton(icons.icon("warning", C["warn"], 14), tr("lib.filter.review"))
+            b.setIconSize(QSize(14, 14))
+        b.setObjectName("rulelink")
         b.setCursor(Qt.CursorShape.PointingHandCursor)
         b.clicked.connect(self._open)
         h.addWidget(b)
@@ -340,17 +347,18 @@ class RecordTable(QObject):
                     it.setData(SUBTEXT, st_sub)
                 t.setItem(i, c, it)
             act = rule_bars_wanted(svc, r)
-            if act:
-                t.item(i, 0).setForeground(QColor(0, 0, 0, 0))        # 이름은 경고 위에 다시 쓴다
-                t.setCellWidget(i, 0, RuleBar(svc, file_key(r.get("path", "")), act,
-                                              name=record_title(r), left=self._text_left(i)))
+            if act:                    # 상태 칸: 상태 글자는 경고 위에 다시 쓴다
+                t.item(i, 2).setForeground(QColor(0, 0, 0, 0))
+                t.item(i, 2).setData(SUBTEXT, None)
+                t.setCellWidget(i, 2, RuleBar(svc, file_key(r.get("path", "")), act,
+                                              name=st_txt, color=st_col, left=self._text_left(i, 2)))
         self.update_progress()
 
-    def _text_left(self, row):
-        """게임 칸에서 글자가 시작하는 x(그림 뒤). 경고 줄을 게임 이름과 같은 자리에 맞춘다."""
+    def _text_left(self, row, col):
+        """칸에서 글자가 시작하는 x. 경고 묶음을 칸 글자와 같은 자리에 맞춘다."""
         from PyQt6.QtWidgets import QStyle, QStyleOptionViewItem
         t = self.table
-        idx = t.model().index(row, 0)
+        idx = t.model().index(row, col)
         opt = QStyleOptionViewItem()
         t.itemDelegate().initStyleOption(opt, idx)
         opt.rect = t.visualRect(idx)
@@ -637,7 +645,7 @@ class VideosPage(QWidget):
         bar = QHBoxLayout()
         bar.setSpacing(8)
         self.tabs = Tabs([("all", tr("lib.filter.all")), ("waiting", tr("lib.filter.waiting")),
-                          ("skipped", tr("lib.filter.skipped"))], self.filter)
+                          ("skipped", tr("lib.filter.skipped")), ("review", tr("lib.filter.review"))], self.filter)
         self.tabs.changed.connect(self._set_filter)
         bar.addWidget(self.tabs, 1)
         self.search = SearchBox(tr("lib.search"))
@@ -737,13 +745,19 @@ class VideosPage(QWidget):
             allrecs = list(store.data["recordings"].items())
         allrecs.sort(key=lambda kv: kv[1].get("added_at", ""), reverse=True)
         live = self.svc.recorder.session
-        counts = {"all": len(allrecs), "waiting": 0, "skipped": 0}
+        counts = {"all": len(allrecs), "waiting": 0, "skipped": 0, "review": 0}
         shown = []
         for k, r in allrecs:
             kind = self._kind(r)
             if kind:
                 counts[kind] += 1
-            if self.filter != "all" and kind != self.filter:
+            review = rule_bars_wanted(self.svc, r)       # 바뀐 규칙으로 판정이 달라지는 영상
+            if review:
+                counts["review"] += 1
+            if self.filter == "review":
+                if not review:
+                    continue
+            elif self.filter != "all" and kind != self.filter:
                 continue
             if self.query and self.query not in (r.get("game") or "").lower():
                 continue
