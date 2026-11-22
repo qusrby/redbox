@@ -17,6 +17,7 @@ from .style import C
 ROW_H = 40
 GAUGE = Qt.ItemDataRole.UserRole + 1     # 표 칸의 진행률(0~1). 있으면 글자 아래에 게이지를 그린다
 SUBTEXT = Qt.ItemDataRole.UserRole + 2   # 표 칸의 작은 둘째 줄 글자. 있으면 글자를 위로 올리고 아래에 쓴다
+SUBICON = Qt.ItemDataRole.UserRole + 3   # 둘째 줄 글자 앞의 작은 그림(QPixmap, 배율이 정해진 것)
 CONTROL_H = 34        # 버튼, 드롭다운, 숫자 칸, 검색 칸, 버튼 묶음의 높이(어디서나 같게)
 SETTING_ROW_H = 66    # 설정 한 줄의 높이(설명이 있든 없든 같게)
 
@@ -283,12 +284,19 @@ class RowHover(QObject):
                     p.save()
                     p.setFont(o.font)
                     p.setPen(o.palette.color(o.palette.ColorRole.Text))
-                    p.drawText(QRectF(left, mid - 21, width, 20), align, text)
+                    p.drawText(QRectF(left, mid - 21, width, 20), align,
+                               p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(width)))
                     f = QFont(o.font)
                     f.setPixelSize(12)
                     p.setFont(f)
                     p.setPen(QColor(C["muted"]))
-                    p.drawText(QRectF(left, mid + 1, width, 20), align, sub)
+                    pic = idx.data(SUBICON)
+                    if pic is not None:
+                        pw, ph = pic.width() / pic.devicePixelRatio(), pic.height() / pic.devicePixelRatio()
+                        p.drawPixmap(QRectF(left, mid + 11 - ph / 2, pw, ph), pic, QRectF(pic.rect()))
+                        left, width = left + pw + 7, width - pw - 7
+                    p.drawText(QRectF(left, mid + 1, width, 20), align,
+                               p.fontMetrics().elidedText(sub, Qt.TextElideMode.ElideRight, int(width)))
                     p.restore()
                 g = idx.data(GAUGE)
                 if g is not None:

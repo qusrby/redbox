@@ -12,7 +12,8 @@ from . import paths
 from .uploader.store import file_key
 
 WIDTH, HEIGHT = 640, 360
-FIRST = 45            # 녹화 시작 뒤 첫 장(로딩 화면을 피하려고 조금 기다린다)
+EARLY = 10            # 녹화 시작 뒤 첫 장. 곧 끝나는 짧은 녹화(자동 삭제되는 영상)도 썸네일이 남게
+FIRST = 45            # 둘째 장(로딩 화면을 피하려고 조금 기다린다)
 EVERY = 180           # 그 뒤 간격
 PICK_AT = 0.4         # 녹화 길이의 이 지점에 가장 가까운 장을 고른다
 DARK = 14             # 평균 밝기가 이보다 낮으면(검은 화면, 로딩) 버린다
@@ -75,12 +76,12 @@ class Shooter:
 
     def begin(self, start):
         _clear_live()
-        self.start, self.next, self.failed = start, start + FIRST, False
+        self.start, self.next, self.failed = start, start + EARLY, False
 
     def tick(self, obs, now):
         if self.next is None or now < self.next:
             return
-        self.next = now + EVERY
+        self.next = now + EVERY if now - self.start >= FIRST else self.start + FIRST
         try:
             data = obs.screenshot(WIDTH, HEIGHT)
         except Exception as e:

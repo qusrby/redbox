@@ -79,8 +79,8 @@ def steam_root():
 
 
 def steam_art(appid):
-    """스팀이 라이브러리 화면용으로 받아 둔 게임 그림. {"header": 460x215, "hero": 1920x620 배경, "logo": 투명 로고,
-    "icon": 32x32}. 스팀 버전에 따라 appid 폴더 바로 아래 또는 그 아래 해시 이름 폴더에 있다(언어 꼬리 _koreana 등)."""
+    """스팀이 라이브러리 화면용으로 받아 둔 게임 그림. {"header": 460x215, "hero": 1920x620 배경, "portrait": 600x900 세로 표지,
+    "logo": 투명 로고, "icon": 32x32}. 스팀 버전에 따라 appid 폴더 바로 아래 또는 그 아래 해시 이름 폴더에 있다(언어 꼬리 _koreana 등)."""
     out = {}
     if not appid:
         return out
@@ -95,6 +95,8 @@ def steam_art(appid):
             out.setdefault("header", p)
         elif re.match(r"library_hero", n) or n.startswith(f"{appid}_library_hero"):
             out.setdefault("hero", p)
+        elif re.match(r"library_600x900", n) or n.startswith(f"{appid}_library_600x900"):
+            out.setdefault("portrait", p)
         elif n.startswith("logo"):
             out.setdefault("logo", p)
         elif re.fullmatch(r"[0-9a-f]{40}\.jpg", n):

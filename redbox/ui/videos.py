@@ -12,19 +12,20 @@ from .. import config, thumbs
 from ..uploader.store import file_key
 from ..i18n import tr
 from . import icons
-from .art import CARD_H, CARD_W, cover
+from .art import cover
 from .style import C
-from .widgets import (GAUGE, SUBTEXT, ElideLabel, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
+from .widgets import (GAUGE, SUBICON, SUBTEXT, ElideLabel, IconButton, fmt_elapsed, tabular, SearchBox, SmoothWheel, Tabs, fmt_day, fmt_len, fmt_time, label, open_target,
                       rec_len, rec_time, table)
 
 GAP = 18
 CARD_MIN_W = 250
-TEXT_H = 58
-LIST_ART_W, LIST_ART_H = 100, 56        # 영상 썸네일(16:9). 없으면 게임 그림
-GAME_W, GAME_H = 60, 28                  # 썸네일 옆 작은 게임 그림(스팀 대표 그림 비율)
-GAME_GAP = 10                            # 썸네일과 게임 그림 사이
-ART_GAP = 14                             # 그림과 게임 이름 사이
-ROW_H = LIST_ART_H + 18
+TEXT_H = 92                              # 카드 아래 글자 칸(파일 이름 두 줄 + 게임 이름 + 상태)
+THUMB_RATIO = 9 / 16                     # 카드 그림(영상 썸네일) 비율
+LIST_ART_W, LIST_ART_H = 110, 62        # 영상 썸네일(16:9, 길이 배지 포함). 없으면 게임 그림
+ART_GAP = 14                             # 썸네일과 파일 이름 사이
+ROW_H = 74
+LIST_PORTRAIT = (14, 21)                 # 목록 둘째 줄 게임 이름 앞의 세로 표지(2:3)
+CARD_PORTRAIT = (36, 54)                 # 카드 글자 칸 왼쪽의 세로 표지
 
 
 def uploading_rec(store):
@@ -37,6 +38,36 @@ def upload_progress(svc, cur):
     """지금 올리는 기록의 진행률(0~1). 첫 조각을 올리기 전이면 0."""
     pr = svc.uploader.progress
     return pr[1] if pr and cur is not None and pr[0] == cur.get("name") else 0.0
+
+
+def two_lines(fm, text, w):
+    """글자를 w 너비에 두 줄까지 나눈다(넘치면 둘째 줄 끝을 줄임표로). 공백에서 끊고, 공백이 없으면 글자 단위로."""
+    if fm.horizontalAdvance(text) <= w:
+        return [text]
+    words, first = text.split(" "), ""
+    for i in range(len(words), 0, -1):
+        cand = " ".join(words[:i])
+        if fm.horizontalAdvance(cand) <= w:
+            first, rest = cand, " ".join(words[i:])
+            break
+    else:
+        n = len(text)
+        while n > 1 and fm.horizontalAdvance(text[:n]) > w:
+            n -= 1
+        first, rest = text[:n], text[n:]
+    return [first, fm.elidedText(rest, Qt.TextElideMode.ElideRight, int(w))]
+
+
+def record_title(r):
+    """영상 제목으로 보일 이름: 녹화본 파일 이름(확장자 빼고, 게임 이름과 시각이 들어 있다). 없으면 게임 이름."""
+    return os.path.splitext(r.get("name") or os.path.basename(r.get("path") or ""))[0] or r.get("game", "")
+
+
+def fmt_clock(sec):
+    """썸네일 배지용 짧은 길이: 1:08:40, 42:12."""
+    sec = int(sec)
+    h, m, s = sec // 3600, sec // 60 % 60, sec % 60
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
 def has_original(r):
@@ -200,13 +231,16 @@ class RecordTable(QObject):
 
         def widest(keys, head):
             return max([fm.horizontalAdvance(tr(k)) for k in keys] + [fm.horizontalAdvance(tr(head))]) + 44
-        t = self.table = table([tr("col.game"), tr("col.when"), tr("col.length"), tr("col.status")], 0,
-                               {1: fm.horizontalAdvance("2026-00-00 00:00") + 48, 2: fm.horizontalAdvance(fmt_len(36000 + 3599)) + 44,
-                                3: max(widest(("up.st.waiting", "up.st.done", "up.st.processing", "up.st.skipped", "orig.deleted",
+        t = self.table = table([tr("col.video"), tr("col.when"), tr("col.status")], 0,
+                               {1: fm.horizontalAdvance("2026-00-00 00:00") + 48,
+                                2: max(widest(("up.st.waiting", "up.st.done", "up.st.processing", "up.st.skipped", "orig.deleted",
                                                "orig.user", "orig.missing", "orig.kept", "orig.until"), "col.status"),
                                        fm.horizontalAdvance(tr("up.st.busy") + " 100%") + 44)})
-        t.setIconSize(QSize(LIST_ART_W + GAME_GAP + GAME_W + ART_GAP, LIST_ART_H))   # 썸네일, 게임 그림(+ 여백)
+        t.setIconSize(QSize(LIST_ART_W + ART_GAP, LIST_ART_H))      # 칸 앞의 영상 썸네일(+ 여백)
         t.verticalHeader().setDefaultSectionSize(ROW_H)
+        self.title_font = QFont(parent.font())
+        self.title_font.setPixelSize(13)
+        self.title_font.setWeight(QFont.Weight.Bold)
         t.cellClicked.connect(lambda r, _c: self._rec(r) and open_record(self._rec(r), self.parent_widget))
         t.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
         t._hover.overlay = self._overlay
@@ -241,25 +275,42 @@ class RecordTable(QObject):
         if r:
             record_menu(self.parent_widget, r, self.table.viewport().mapToGlobal(pos))
 
-    def _icon(self, game, thumb=None):
-        """줄 앞 그림: 영상 썸네일과 그 옆 작은 게임 그림. 썸네일이 없으면 큰 자리에 게임 그림만."""
-        key = ((game or "").lower(), thumb)
+    def _icon(self, game, thumb, length):
+        """줄 앞 그림: 영상 썸네일(없으면 게임 그림)과 오른쪽 아래 길이 배지."""
+        key = ((game or "").lower(), thumb, length)
         if key not in self.icons:
             k = 2
-            pm = QPixmap((LIST_ART_W + GAME_GAP + GAME_W + ART_GAP) * k, LIST_ART_H * k)
+            pm = QPixmap((LIST_ART_W + ART_GAP) * k, LIST_ART_H * k)
             pm.fill(Qt.GlobalColor.transparent)
             p = QPainter(pm)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
             shot = cover(QPixmap(thumb), LIST_ART_W * k, LIST_ART_H * k) if thumb else None
-            if shot is not None:
-                p.drawPixmap(QRect(0, 0, LIST_ART_W * k, LIST_ART_H * k), shot)
-                art = self.art.game_thumb(game, GAME_W * k, GAME_H * k)
-                p.drawPixmap(QRect((LIST_ART_W + GAME_GAP) * k, (LIST_ART_H - GAME_H) // 2 * k, GAME_W * k, GAME_H * k), art)
-            else:
-                art = self.art.game_thumb(game, LIST_ART_W * k, LIST_ART_H * k)
-                p.drawPixmap(QRect(0, 0, LIST_ART_W * k, LIST_ART_H * k), art)   # 크기를 정해 그린다(그림의 배율과 상관없이)
+            if shot is None:
+                shot = self.art.game_thumb(game, LIST_ART_W * k, LIST_ART_H * k)
+            p.drawPixmap(QRect(0, 0, LIST_ART_W * k, LIST_ART_H * k), shot)   # 크기를 정해 그린다(그림의 배율과 상관없이)
+            if length:
+                f = QFont(self.parent_widget.font())
+                f.setPixelSize(11 * k)
+                f.setWeight(QFont.Weight.DemiBold)
+                p.setFont(tabular(f))
+                w = p.fontMetrics().horizontalAdvance(length) + 10 * k
+                h = 17 * k
+                box = QRectF(LIST_ART_W * k - 4 * k - w, LIST_ART_H * k - 4 * k - h, w, h)
+                p.fillRect(box, QColor(0, 0, 0, 200))
+                p.setPen(QColor("#ffffff"))
+                p.drawText(box, Qt.AlignmentFlag.AlignCenter, length)
             p.end()
             pm.setDevicePixelRatio(k)
             self.icons[key] = QIcon(pm)
+        return self.icons[key]
+
+    def _portrait(self, game):
+        key = ("portrait", (game or "").lower())
+        if key not in self.icons:
+            w, h = LIST_PORTRAIT
+            pm = self.art.game_portrait(game, w * 2, h * 2).copy()
+            pm.setDevicePixelRatio(2)
+            self.icons[key] = pm
         return self.icons[key]
 
     def fill(self, recs):
@@ -274,21 +325,25 @@ class RecordTable(QObject):
             if r is cur:
                 self.busy_row = i
             st_txt, st_col, _ic, st_sub = record_state(r, r is cur, upload_progress(svc, cur), svc.uploader)
-            vals = [(r.get("game", ""), C["text"]), (fmt_time(rec_time(r)), C["text2"]),
-                    (fmt_len(rec_len(r)), C["text2"]), (st_txt, st_col)]
+            game = r.get("game", "")
+            vals = [(record_title(r), C["text"]), (fmt_time(rec_time(r)), C["text2"]), (st_txt, st_col)]
             for c, (val, color) in enumerate(vals):
                 it = QTableWidgetItem(str(val))
                 it.setForeground(QColor(color))
-                if c == 0:
-                    it.setIcon(self._icon(r.get("game", ""), thumbs.find(r.get("path"))))
-                if c == 3 and st_sub:
+                if c == 0:             # 썸네일(길이 배지) / 파일 이름 / 세로 표지와 게임 이름
+                    n = rec_len(r)
+                    it.setIcon(self._icon(game, thumbs.find(r.get("path")), fmt_clock(n) if n else ""))
+                    it.setFont(self.title_font)
+                    it.setData(SUBTEXT, game)
+                    it.setData(SUBICON, self._portrait(game))
+                if c == 2 and st_sub:
                     it.setData(SUBTEXT, st_sub)
                 t.setItem(i, c, it)
             act = rule_bars_wanted(svc, r)
             if act:
                 t.item(i, 0).setForeground(QColor(0, 0, 0, 0))        # 이름은 경고 위에 다시 쓴다
                 t.setCellWidget(i, 0, RuleBar(svc, file_key(r.get("path", "")), act,
-                                              name=r.get("game", ""), left=self._text_left(i)))
+                                              name=record_title(r), left=self._text_left(i)))
         self.update_progress()
 
     def _text_left(self, row):
@@ -305,7 +360,7 @@ class RecordTable(QObject):
 
     def update_progress(self):
         """올리고 있는 줄의 글자와 게이지만 고친다(표 전체를 다시 채우지 않고 1초마다)."""
-        it = self.table.item(self.busy_row, 3) if self.busy_row >= 0 else None
+        it = self.table.item(self.busy_row, 2) if self.busy_row >= 0 else None
         if it is None:
             return
         svc = self.parent_widget.svc
@@ -352,15 +407,11 @@ class Card(QWidget):
         if self._scaled is None or self._scaled[0] != key:
             pm = cover(QPixmap(src), int(w * ratio), int(h * ratio)) if src else None
             if pm is None:
-                pm = self.art.record_image(self.game()).scaled(int(w * ratio), int(h * ratio), Qt.AspectRatioMode.IgnoreAspectRatio,
-                                                               Qt.TransformationMode.SmoothTransformation)
+                pm = cover(self.art.record_image(self.game()), int(w * ratio), int(h * ratio))
                 src = None
             pm.setDevicePixelRatio(ratio)
-            self._scaled = (key, pm, src is not None)
+            self._scaled = (key, pm)
         return self._scaled[1]
-
-    def _has_shot(self):
-        return bool(self._scaled and self._scaled[2])
 
     @staticmethod
     def _chip(p, x, y, text, fg, bg, icon_name=None, icon_color=None, right=False):
@@ -384,7 +435,7 @@ class Card(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         w = self.width()
-        th = round(w * CARD_H / CARD_W)
+        th = round(w * THUMB_RATIO)
         hover = self.underMouse() and self.rec is not None
         p.drawPixmap(0, 0, self._image(w, th))
         small = QFont(self.font())
@@ -401,17 +452,10 @@ class Card(QWidget):
             p.drawRect(QRectF(1, 1, w - 2, th - 2))
         else:
             r = self.rec
-            text, color, ic, sub = record_state(r, self.busy, self.progress, self.up, self.exists)
-            if ic == "youtube":
-                self._chip(p, 10, 10, text, QColor("#ffffff"), dark, "youtube", "#ff4e45")
-            elif ic == "upload":
-                self._chip(p, 10, 10, text, QColor(C["accent"]), dark, "upload", C["accent"])
-            else:
-                self._chip(p, 10, 10, text, QColor(color if color != C["muted"] else C["text2"]), dark)
             n = rec_len(r)
             if n:
                 bar = self.rule.height() if self.rule else 0          # 경고 띠가 있으면 그 위에
-                self._chip(p, w - 10, th - 32 - bar, fmt_len(n), QColor("#ffffff"), dark, right=True)
+                self._chip(p, w - 10, th - 32 - bar, fmt_clock(n), QColor("#ffffff"), dark, right=True)
             if self.busy:                  # 그림 아래 끝에 업로드 게이지
                 p.fillRect(QRectF(0, th - 4, w, 4), QColor(0, 0, 0, 160))
                 p.fillRect(QRectF(0, th - 4, w * max(0.0, min(1.0, self.progress)), 4), QColor(C["accent"]))
@@ -427,35 +471,43 @@ class Card(QWidget):
                 p.setPen(QPen(QColor(C["accent"]), 2))
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.drawRect(QRectF(1, 1, w - 2, th - 2))
-        # 아래 글자: 게임 이름 / 시각과 녹화본 상태(업로드 뒤 남아 있을 때)
+        # 아래: 왼쪽에 세로 표지, 오른쪽에 파일 이름(두 줄까지, 녹화 중이면 게임 이름) / 게임 이름 / 상태
+        pw, ph = CARD_PORTRAIT
+        p.drawPixmap(QRectF(0, th + 10, pw, ph), self.art.game_portrait(self.game(), pw * 2, ph * 2), QRectF(0, 0, pw * 2, ph * 2))
+        x = pw + 10
+        tw = w - x
         title = QFont(self.font())
-        title.setPixelSize(14)
+        title.setPixelSize(13)
         title.setWeight(QFont.Weight.Bold)
         p.setFont(title)
         p.setPen(QColor(C["text"]))
         fm = QFontMetrics(title)
-        tx = 0
-        if self._has_shot():               # 큰 그림이 영상 장면이면 게임 그림을 제목 앞에 작게
-            gh = 22
-            gw = round(gh * CARD_W / CARD_H)
-            p.drawPixmap(QRectF(0, th + 8, gw, gh), self.art.game_thumb(self.game(), gw * 2, gh * 2),
-                         QRectF(0, 0, gw * 2, gh * 2))
-            tx = gw + 8
-        p.drawText(QRectF(tx, th + 8, w - tx, 22), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                   fm.elidedText(self.game() or "", Qt.TextElideMode.ElideRight, w - tx))
+        name = record_title(self.rec) if self.rec else (self.game() or "")
+        lh = fm.lineSpacing()
+        for i, line in enumerate(two_lines(fm, name, tw)):
+            p.drawText(QRectF(x, th + 8 + i * lh, tw, lh), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, line)
+        y = th + 8 + 2 * lh + 4
         meta = QFont(self.font())
         meta.setPixelSize(12)
         p.setFont(meta)
+        mfm = QFontMetrics(meta)
+        left = Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
         if self.live:
-            left = tr("card.started").format(t=fmt_time(datetime.datetime.fromtimestamp(self.live.start)))
-            right, rcolor = tr("orig.recording"), C["rec"]
+            second = tr("card.started").format(t=fmt_time(datetime.datetime.fromtimestamp(self.live.start)))
+            state, scolor, sub = tr("orig.recording"), C["rec"], ""
         else:
-            left = fmt_time(rec_time(self.rec))           # 녹화 시각(날짜까지). 길이와 헷갈리지 않게
-            right, rcolor = record_state(self.rec, exists=self.exists, up=self.up)[3] or "", C["muted"]
+            second = self.game() or ""
+            state, scolor, _ic, sub = record_state(self.rec, self.busy, self.progress, self.up, self.exists)
         p.setPen(QColor(C["muted"]))
-        p.drawText(QRectF(0, th + 32, w, 18), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, left)
-        p.setPen(QColor(rcolor))
-        p.drawText(QRectF(0, th + 32, w, 18), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, right)
+        p.drawText(QRectF(x, y, tw, 18), left, mfm.elidedText(second, Qt.TextElideMode.ElideRight, int(tw)))
+        y += 18
+        p.setPen(QColor(scolor))
+        p.drawText(QRectF(x, y, tw, 18), left, state)
+        if sub:
+            sx = x + mfm.horizontalAdvance(state) + 10
+            p.setPen(QColor(C["muted"]))
+            p.drawText(QRectF(sx, y, max(0, w - sx), 18), left,
+                       mfm.elidedText(sub, Qt.TextElideMode.ElideRight, int(max(0, w - sx))))
         p.end()
 
     def mouseReleaseEvent(self, e):
@@ -478,7 +530,7 @@ class Card(QWidget):
     def resizeEvent(self, e):
         super().resizeEvent(e)
         if self.rule:
-            th = round(self.width() * CARD_H / CARD_W)
+            th = round(self.width() * THUMB_RATIO)
             h = RuleBar.H + 10
             self.rule.setGeometry(0, th - h, self.width(), h)
 
@@ -515,7 +567,7 @@ class Grid(QWidget):
         w = max(self.width(), CARD_MIN_W)
         cols = max(1, (w + GAP) // (CARD_MIN_W + GAP))
         cw = (w - GAP * (cols - 1)) / cols
-        ch = round(cw * CARD_H / CARD_W) + TEXT_H
+        ch = round(cw * THUMB_RATIO) + TEXT_H
         y, col = 0, 0
         for kind, wid in self.items:
             if kind == "head":
@@ -584,8 +636,8 @@ class VideosPage(QWidget):
         v.setSpacing(16)
         bar = QHBoxLayout()
         bar.setSpacing(8)
-        self.tabs = Tabs([("all", tr("lib.filter.all")), ("kept", tr("lib.filter.kept")),
-                          ("waiting", tr("lib.filter.waiting")), ("skipped", tr("lib.filter.skipped"))], self.filter)
+        self.tabs = Tabs([("all", tr("lib.filter.all")), ("waiting", tr("lib.filter.waiting")),
+                          ("skipped", tr("lib.filter.skipped"))], self.filter)
         self.tabs.changed.connect(self._set_filter)
         bar.addWidget(self.tabs, 1)
         self.search = SearchBox(tr("lib.search"))
@@ -659,8 +711,6 @@ class VideosPage(QWidget):
     @staticmethod
     def _kind(r):
         st = r.get("status")
-        if st == "uploaded" and has_original(r):
-            return "kept"
         if st == "waiting":
             return "waiting"
         if st in ("excluded", "auto_deleted", "missing"):
@@ -687,7 +737,7 @@ class VideosPage(QWidget):
             allrecs = list(store.data["recordings"].items())
         allrecs.sort(key=lambda kv: kv[1].get("added_at", ""), reverse=True)
         live = self.svc.recorder.session
-        counts = {"all": len(allrecs), "kept": 0, "waiting": 0, "skipped": 0}
+        counts = {"all": len(allrecs), "waiting": 0, "skipped": 0}
         shown = []
         for k, r in allrecs:
             kind = self._kind(r)

@@ -29,9 +29,9 @@ def _tile(name, w, h):
     pm = QPixmap(w, h)
     p = QPainter(pm)
     g = QLinearGradient(0, 0, w, h)
-    hue = _hue(name or "?")
-    g.setColorAt(0, QColor.fromHsl(hue, 70, 46))
-    g.setColorAt(1, QColor.fromHsl((hue + 40) % 360, 60, 22))
+    hue = 213 + _hue(name or "?") % 13 - 6     # 테마 파란색(#2a7de1) 계열. 이름마다 색조만 조금씩 달리
+    g.setColorAt(0, QColor.fromHsl(hue, 170, 112))
+    g.setColorAt(1, QColor.fromHsl(hue, 150, 40))
     p.fillRect(0, 0, w, h, g)
     p.end()
     return pm
@@ -136,6 +136,15 @@ class Art(QObject):
             files = self.game_files(game)
             src = files.get("header") or files.get("hero")
             pm = cover(QPixmap(src), w, h) if src else None
+            self._small[key] = pm if pm is not None else placeholder(game, w, h, self._icon(files))
+        return self._small[key]
+
+    def game_portrait(self, game, w, h):
+        """세로 표지(스팀 600x900): 영상 목록과 카드에서 게임을 알아보게. 없으면 아이콘 타일, 머리글자 타일."""
+        key = ("portrait", artwork.norm(game), w, h)
+        if key not in self._small:
+            files = self.game_files(game)
+            pm = cover(QPixmap(files["portrait"]), w, h) if files.get("portrait") else None
             self._small[key] = pm if pm is not None else placeholder(game, w, h, self._icon(files))
         return self._small[key]
 

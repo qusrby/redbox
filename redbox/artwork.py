@@ -11,13 +11,15 @@ import os
 import re
 import shutil
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
 from . import paths
 from .detect.catalog import steam_art
 
-KINDS = ("hero", "header", "icon", "iconsrc")
+KINDS = ("hero", "header", "portrait", "icon", "iconsrc")
+STEAM_KINDS = (("header", "header.jpg"), ("hero", "library_hero.jpg"), ("portrait", "library_600x900.jpg"))
 STORE_SEARCH = "https://store.steampowered.com/api/storesearch/?"
 STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps/{}/{}"
 RETRY_MISS_DAYS = 7
@@ -103,7 +105,7 @@ def set_custom_image(game, path, image):
 def _steam(catalog):
     for _d, e in catalog.dirs:
         if e.source == "steam" and e.appid:
-            files = {k: v for k, v in steam_art(e.appid).items() if k in ("header", "hero")}
+            files = {k: v for k, v in steam_art(e.appid).items() if k in ("header", "hero", "portrait")}
             if files:
                 yield f"steam_{e.appid}", [e.name], files
 
@@ -147,8 +149,8 @@ def _steam_by_name(recorded, index):
             misses[n] = now
             changed_miss = True
             continue
-        files = {k: v for k, v in steam_art(appid).items() if k in ("header", "hero")}
-        for kind, fn in (("header", "header.jpg"), ("hero", "library_hero.jpg")):
+        files = {k: v for k, v in steam_art(appid).items() if k in ("header", "hero", "portrait")}
+        for kind, fn in STEAM_KINDS:
             files.setdefault(kind, STEAM_CDN.format(appid, fn))
         yield f"steam_{appid}", [name], files
     if changed_miss:
@@ -241,6 +243,36 @@ def collect(catalog, custom_games, recorded=(), log=None):
             changed = True
             if log:
                 log(f"게임 그림 보관: {new[0]} ({key.split('_')[0]})")
+    if _portraits(index, log):
+        changed = True
     if changed:
         save_index(index)
     return changed
+
+
+def _portraits(index, log=None):
+    """세로 표지가 없는 스팀 게임은 상점 그림 서버에서 받는다(예전에 모아 둔 게임 포함). 상점에 없으면 표시해 두고 다시 묻지 않는다."""
+    got = False
+    for key in sorted(set(index.values())):
+        if not key.startswith("steam_"):
+            continue
+        d = art_dir(key)
+        if not os.path.isdir(d) or any(f.startswith(("portrait.", "noportrait")) for f in os.listdir(d)):
+            continue
+        try:
+            data = _get(STEAM_CDN.format(key[6:], "library_600x900.jpg"))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                open(os.path.join(d, "noportrait"), "w").close()
+            continue
+        except (OSError, ValueError):
+            continue                       # 연결이 안 되면 다음에 다시
+        if len(data) < 1000:
+            continue
+        with open(os.path.join(d, "portrait.jpg.part"), "wb") as f:
+            f.write(data)
+        os.replace(os.path.join(d, "portrait.jpg.part"), os.path.join(d, "portrait.jpg"))
+        got = True
+    if got and log:
+        log("게임 세로 표지 보관")
+    return got
