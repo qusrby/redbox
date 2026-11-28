@@ -116,6 +116,50 @@ class Recorder:
         except Exception as e:
             self.log(f"  [복구] OBS 다시 켜기 실패: {e}")
 
+    def _heal_crash(self):
+        """OBS 가 녹화 도중 충돌해 'OBS has crashed!' 창에 멈춰 있으면 끄고 다시 켠다.
+        충돌한 OBS 는 웹소켓에 한동안 '녹화 중'으로 답해 직접 켠 녹화로 잘못 보이므로 창으로 알아본다.
+        그래픽 드라이버에 걸려 끝나지 않는 OBS 가 남으면 새 OBS 는 '이미 실행 중' 확인 없이 켠다."""
+        from .obs import clear_crash_marks, crash_window, find_obs, launch_obs, obs_processes
+        try:
+            hit = crash_window()
+            if not hit or hit[0] in self.healed_obs:
+                return
+            pid = hit[0]
+            self.healed_obs.add(pid)
+            lost = self.session
+            self.log("[복구] OBS 가 충돌함 -> OBS 를 다시 켬" + (f" (녹화 중이던 {lost.game} 영상은 저장되지 않았을 수 있음)" if lost else ""))
+            if lost:
+                self.session = None
+                self.shooter.cancel()
+                self._stop_subtitle()
+                self.retry_after.pop(lost.path.lower(), None)
+            self.obs.disconnect()
+            self.connected, self.external = False, False
+            if self.down_since is None:
+                self.down_since = time.time()
+            import psutil
+            exe = None
+            for p in [psutil.Process(x) for x in obs_processes()]:
+                try:
+                    exe = exe or p.exe()
+                    p.kill()
+                except psutil.Error:
+                    pass
+            deadline = time.time() + 8
+            while obs_processes() and time.time() < deadline:
+                time.sleep(0.5)
+            stuck = bool(obs_processes())
+            clear_crash_marks()
+            exe = exe or find_obs()
+            if exe:
+                launch_obs(exe, multi=stuck)
+                if stuck:
+                    self.log("  [복구] 앞 OBS 가 끝나지 않아(그래픽 드라이버 대기) 새 OBS 를 따로 켬")
+            self.next_try = time.time() + 10      # OBS 가 웹소켓을 열 시간
+        except Exception as e:
+            self.log(f"  [복구] 충돌한 OBS 다시 켜기 실패: {e}")
+
     def _drop(self, e):
         self.log(f"[연결 끊김] OBS ({e}) -> 다시 연결 시도")
         self.obs.disconnect()
@@ -138,6 +182,7 @@ class Recorder:
     # -- 메인 ----------------------------------------------------------------------------------
     def update(self, decisions):
         """감지 결과({pid: Decision})를 받아 녹화를 맞춘다. 2초마다 부른다."""
+        self._heal_crash()
         if not self.ensure_connected():
             return
         try:
