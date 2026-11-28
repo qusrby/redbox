@@ -54,6 +54,7 @@ class Recorder:
         self.external = False         # 사용자가 직접 켠 녹화가 진행 중
         self.next_sweep = 0
         self.healed_obs = set()       # 비정상 종료 확인 창에서 멈춰 다시 켜 준 OBS pid(한 번만)
+        self.subtitle = None          # 녹화에 얹은 자막(설정에 자막 파일이 있을 때)
 
     # -- OBS 연결 ------------------------------------------------------------------------------
     def ensure_connected(self):
@@ -192,9 +193,11 @@ class Recorder:
             target = find_window(d.pid, d.exe)
             self.obs.set_target(target or window_value("", "", d.exe))
             time.sleep(1.0)        # 캡처가 창에 붙을 시간
+            self._start_subtitle()
             self.obs.start(folder)
         except Exception as e:
             self.log(f"[오류] 녹화 시작 실패({d.exe}): {e}")
+            self._stop_subtitle()
             self.retry_after[d.path.lower()] = time.time() + FAIL_COOLDOWN
             try:
                 if self.obs.recording():
@@ -225,7 +228,9 @@ class Recorder:
             path = self.obs.stop()
         except Exception as e:
             self.log(f"[오류] 녹화 정지 실패: {e}")
+            self._stop_subtitle()
             raise
+        self._stop_subtitle()
         self.log(f"녹화 정지: {s.exe.lower()}")
         new = None
         if path and os.path.exists(path):
@@ -250,6 +255,27 @@ class Recorder:
             self.on_finished(new, s.game, duration)
         return new
 
+    def _start_subtitle(self):
+        """설정에 자막 파일이 있으면 녹화될 장면에 자막을 얹는다. 실패해도 녹화는 그대로 한다."""
+        path = (self.cfg["recording"].get("subtitle_file") or "").strip()
+        if not path:
+            return
+        from .obs import open_client
+        from .subtitle import Overlay
+        try:
+            scene = self.obs.record_scene()
+        except Exception as e:
+            self.log(f"  [자막] 장면을 못 읽음: {e}")
+            return
+        ov = Overlay(path, lambda: open_client(self.cfg["obs"]), self.log)
+        if ov.start(scene):
+            self.subtitle = ov
+
+    def _stop_subtitle(self):
+        ov, self.subtitle = self.subtitle, None
+        if ov:
+            ov.stop()
+
     def _reset_dir(self):
         """세션이 끝나면 녹화 폴더를 되돌린다(게임 밖에서 찍은 스크린샷이 방금 게임 폴더로 가지 않게).
         스크린샷 폴더를 정해 두었으면 그곳으로, 아니면 영상 폴더 최상위로."""
@@ -265,6 +291,7 @@ class Recorder:
         s, self.session = self.session, None
         self.shooter.cancel()
         path = self.obs.stop()
+        self._stop_subtitle()
         if path and files.remove_with_retry(path):
             self.log(f"  검은 화면 녹화 파일 삭제: {os.path.basename(path)}")
         self.retry_after[s.path.lower()] = time.time() + ABORT_COOLDOWN

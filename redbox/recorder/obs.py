@@ -29,6 +29,16 @@ def websocket_settings():
             "password": d.get("server_password", "") if d.get("auth_required") else ""}
 
 
+def open_client(cfg_obs):
+    """OBS 웹소켓 연결 하나. 설정에 비밀번호가 없으면 OBS 가 저장해 둔 값을 쓴다."""
+    port, password = cfg_obs.get("port") or 4455, cfg_obs.get("password") or ""
+    if not password:
+        ws = websocket_settings()
+        if ws:
+            port, password = ws["port"], ws["password"]
+    return obsws.ReqClient(host=cfg_obs.get("host") or "localhost", port=port, password=password, timeout=5)
+
+
 class Obs:
     def __init__(self, cfg_obs):
         self.cfg = cfg_obs
@@ -41,14 +51,14 @@ class Obs:
         self.seeded = False      # 오디오 설정을 OBS 의 지금 상태로 처음 정했으면 True(앱이 설정을 저장한다)
 
     def connect(self):
-        port, password = self.cfg.get("port") or 4455, self.cfg.get("password") or ""
-        if not password:
-            ws = websocket_settings()
-            if ws:
-                port, password = ws["port"], ws["password"]
-        self.client = obsws.ReqClient(host=self.cfg.get("host") or "localhost", port=port,
-                                      password=password, timeout=5)
+        self.client = open_client(self.cfg)
         self.setup()
+        try:                                   # 지난 녹화에서 못 치운 자막 소스(앱, PC 가 꺼짐)
+            from .subtitle import remove_leftovers
+            if not self.recording():
+                remove_leftovers(self.client)
+        except Exception:
+            pass
 
     def disconnect(self):
         try:
@@ -160,6 +170,10 @@ class Obs:
         self.client.set_input_settings(self.capture, {"capture_mode": "window", "window": value}, True)
         if self.audio:
             self.client.set_input_settings(self.audio, {"window": value}, True)
+
+    def record_scene(self):
+        """녹화될 장면: 앱 전용 장면을 쓰면 그 장면, 아니면 지금 방송 화면 장면."""
+        return self.scene or self.client.get_scene_list().current_program_scene_name
 
     def recording(self):
         return bool(self.client.get_record_status().output_active)

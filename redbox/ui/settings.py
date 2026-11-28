@@ -56,8 +56,17 @@ class SettingsPage(QScrollArea):
                                       button(tr("set.change"), self._pick_folder, icon_name="folder"))
         autodel = spin(up.get("auto_delete_minutes"), 0, 60, tr("unit.min_le"), tr("unit.off"))
         autodel.valueChanged.connect(lambda val: self._set_up("auto_delete_minutes", val))
+        sub = QWidget()
+        sl = QHBoxLayout(sub)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.setSpacing(8)
+        self.sub_clear = button(tr("set.subtitle.clear"), self._clear_subtitle)
+        sl.addWidget(self.sub_clear)
+        sl.addWidget(button(tr("set.subtitle.pick"), self._pick_subtitle, icon_name="folder"))
+        self.sub_row = setting_row(tr("set.subtitle"), rec.get("subtitle_file") or tr("set.subtitle.off"), sub)
+        self.sub_clear.setVisible(bool(rec.get("subtitle_file")))
         v.addLayout(section(tr("set.recording"), [
-            self.folder_row, setting_row(tr("set.autodel"), tr("set.autodel.desc"), autodel)]))
+            self.folder_row, setting_row(tr("set.autodel"), tr("set.autodel.desc"), autodel), self.sub_row]))
 
         # 오디오
         obs = self.cfg["obs"]
@@ -158,6 +167,25 @@ class SettingsPage(QScrollArea):
             if desc:
                 desc.setText(self.cfg["recording"]["video_root"])
             self._saved()
+
+    def _set_subtitle(self, path):
+        self.cfg["recording"]["subtitle_file"] = path
+        desc = self.sub_row.findChild(QLabel, "rowdesc")
+        if desc:
+            desc.setText(path or tr("set.subtitle.off"))
+        self.sub_clear.setVisible(bool(path))
+        self._saved()
+
+    def _pick_subtitle(self):
+        """자막 파일 고르기. 바깥 프로그램이 아직 만들지 않은 파일도 이름을 적어 정할 수 있게 저장 창으로 연다."""
+        cur = self.cfg["recording"].get("subtitle_file") or ""
+        f, _ = QFileDialog.getSaveFileName(self, tr("set.subtitle"), cur, tr("set.subtitle.filter"),
+                                           options=QFileDialog.Option.DontConfirmOverwrite)
+        if f:
+            self._set_subtitle(os.path.normpath(f))
+
+    def _clear_subtitle(self):
+        self._set_subtitle("")
 
     # -- 유튜브 로그인 ---------------------------------------------------------------------------------
     def _signed_in(self):

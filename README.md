@@ -18,6 +18,7 @@
 - PC 정리: 유튜브 처리가 끝난 것을 확인하고 정한 기간(기본 7일)이 지나면 녹화본 삭제
 - 업로드 도중 PC 가 꺼지거나 앱이 다시 켜지면 끊긴 지점부터 이어 올리고, 유튜브 처리가 멈춘 영상은 자동으로 정리하고 다시 업로드
 - PC 가 갑자기 꺼진 뒤 OBS Studio 가 비정상 종료 확인 창에서 멈춰 연결되지 않으면 OBS Studio 를 알아서 다시 켬
+- 녹화에 자막 얹기(선택): 다른 프로그램이 고쳐 쓰는 글 파일을 읽어 녹화 장면에 함께 녹화. 자리와 크기는 파일에서 정함([자막 파일 약속](docs/subtitle.md))
 - 화면: 트레이 아이콘(녹화 중이면 빨간색), 대시보드, 영상, 게임, 설정
 - 대시보드: 녹화 상태(녹화 중이면 게임과 경과 시간, OBS Studio 가 꺼져 있으면 실행 버튼), 앱, OBS Studio, OBS 연결, 유튜브 상태(올리는 영상과 진행률), 최근 영상, YouTube 스튜디오 바로가기
 - 영상: 녹화한 영상 목록(목록 또는 카드 보기, 녹화 중 찍어 둔 장면 썸네일과 길이, 파일 이름, 게임 세로 표지, 업로드 단계와 녹화본 파일 상태를 한 칸에, 필터와 검색)
@@ -98,6 +99,7 @@ python -m redbox run
 | `redbox/detect/nonplay.py` | 다시보기, 관전 실행 거르기 |
 | `redbox/recorder/obs.py` | OBS 연결, 캡처 소스 준비, 녹화 시작과 정지 |
 | `redbox/recorder/session.py` | 녹화 세션: 시작, 창 다시 찾기, 정지와 파일 정리 |
+| `redbox/recorder/subtitle.py` | 녹화에 자막 얹기: 글 파일을 지켜보다 OBS 장면의 바탕과 글 소스를 고침 |
 | `redbox/recorder/files.py` | 파일 이름 정리, 안전한 이동, 스크린샷 정리 |
 | `redbox/recorder/naming.py` | 게임 폴더 이름(상표 기호 제거, 기존 폴더 이름에 맞추기) |
 | `redbox/uploader/worker.py` | 업로드 스레드: 길이 규칙, 업로드, 재생목록, 처리 확인과 PC 정리 |
@@ -126,6 +128,7 @@ python -m redbox run
 | `redbox/ui/frame.py` | 제목 표시줄 없는 창: 창 버튼, 이동과 크기 조절 |
 | `Redbox.pyw` | 콘솔 창 없이 실행하는 진입 파일 |
 | `docs/youtube-key.md` | 유튜브 키 만들기 안내 |
+| `docs/subtitle.md` | 녹화에 자막 얹기와 자막 파일 약속 |
 | `redbox/updater.py` | 새 버전 확인(깃허브 Releases) |
 | `redbox/assets/fonts/` | Pretendard 글꼴(OFL) |
 | `packaging/build.py` | 아이콘, exe, 설치 파일 빌드 |
