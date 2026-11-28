@@ -39,6 +39,8 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=force
+; Redbox.exe 를 쓰는 프로그램(Redbox 자신)만 닫는다. 다른 프로그램(OBS 등)은 건드리지 않게
+CloseApplicationsFilter=Redbox.exe
 RestartApplications=no
 
 [Languages]

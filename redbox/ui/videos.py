@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QMenu, QPushButton, QScrollAre
                              QTableWidgetItem, QVBoxLayout, QWidget)
 
 from .. import config, thumbs
+from ..paths import start_file
 from ..uploader.store import file_key
 from ..i18n import tr
 from . import icons
@@ -194,7 +195,7 @@ def record_menu(parent, r, pos):
     path, url = r.get("path", ""), r.get("url")
     exists = os.path.isfile(path)
     m = QMenu(parent)
-    a = m.addAction(icons.icon("play", C["text2"], 16), tr("act.play"), lambda: os.startfile(path))
+    a = m.addAction(icons.icon("play", C["text2"], 16), tr("act.play"), lambda: start_file(path))
     a.setEnabled(exists)
     a = m.addAction(icons.icon("folder", C["text2"], 16), tr("act.folder"),
                     lambda: open_target(path if exists else os.path.dirname(path)))
@@ -212,7 +213,7 @@ def open_record(r, parent=None):
     """누르면: 원본이 있으면 재생, 없으면 유튜브. 둘 다 없으면 왜 없는지 알려 준다."""
     path = r.get("path", "")
     if os.path.isfile(path):
-        os.startfile(path)
+        start_file(path)
     elif r.get("url"):
         open_target(r["url"])
     elif parent is not None:          # 열 수 없는 영상: 왜 없는지 짧은 토스트로

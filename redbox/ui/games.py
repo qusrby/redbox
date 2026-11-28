@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMenu, QScrollArea
 
 from .. import artwork, config
 from ..detect.catalog import source_name
+from ..paths import start_file
 from ..i18n import tr
 from ..recorder import naming
 from . import icons
@@ -208,7 +209,7 @@ class GamesPage(QWidget):
         m = QMenu(self)
         m.addAction(icons.icon("image", C["text2"], 16), tr("games.set_image"), lambda: self._set_image(name, path))
         m.addAction(icons.icon("folder", C["text2"], 16), tr("games.open_folder"),
-                    lambda: os.startfile(path if os.path.isdir(path) else os.path.dirname(path)))
+                    lambda: start_file(path if os.path.isdir(path) else os.path.dirname(path)))
         m.addSeparator()
         m.addAction(icons.icon("trash", C["text2"], 16), tr("games.remove"), lambda: self._remove(path))
         m.exec(anchor.mapToGlobal(anchor.rect().bottomLeft()))

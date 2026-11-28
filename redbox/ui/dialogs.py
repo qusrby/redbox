@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (QDialog, QFileDialog, QFileIconProvider, QFrame, QH
                              QScrollArea, QVBoxLayout, QWidget)
 
 from .. import config
+from ..paths import start_file
 from ..i18n import tr
 from . import icons
 from .style import C
@@ -170,7 +171,7 @@ class RuleDialog(_Dialog):
             go.setObjectName("link")
             go.setIcon(icons.icon("play" if local else "external", C["text2"], 14))
             go.setCursor(Qt.CursorShape.PointingHandCursor)
-            go.clicked.connect(lambda: os.startfile(path) if os.path.isfile(path) else open_target(url))
+            go.clicked.connect(lambda: start_file(path) if os.path.isfile(path) else open_target(url))
             top.addWidget(go)
         self.lay.addLayout(top)
         old = rec.get("rule_at")

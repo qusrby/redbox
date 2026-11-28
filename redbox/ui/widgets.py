@@ -135,12 +135,13 @@ def open_target(target):
     """파일이면 탐색기에서 선택, 폴더면 열기, 주소면 브라우저."""
     if not target:
         return
+    from ..paths import child_env, start_file
     if target.startswith("http"):
-        os.startfile(target)
+        start_file(target)
     elif os.path.isfile(target):
-        subprocess.Popen(f'explorer /select,"{target}"')
+        subprocess.Popen(f'explorer /select,"{target}"', env=child_env())
     elif os.path.isdir(target):
-        os.startfile(target)
+        start_file(target)
 
 
 def label(text, name=None, wrap=False):

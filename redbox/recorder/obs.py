@@ -306,7 +306,8 @@ def launch_obs(exe, multi=False):
     """OBS 를 트레이로 켠다. OBS 는 자기 폴더에서 실행해야 설정과 플러그인을 찾는다.
     multi: 끝나지 않는 앞 OBS 가 남아 있어도 '이미 실행 중' 확인 창 없이 켠다."""
     import subprocess
-    subprocess.Popen([exe, "--minimize-to-tray"] + (["--multi"] if multi else []), cwd=os.path.dirname(exe),
+    from ..paths import child_env
+    subprocess.Popen([exe, "--minimize-to-tray"] + (["--multi"] if multi else []), cwd=os.path.dirname(exe), env=child_env(),
                      creationflags=0x00000008 | 0x00000200, close_fds=True)   # DETACHED, NEW_PROCESS_GROUP
 
 
