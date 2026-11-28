@@ -18,6 +18,8 @@ import time
 
 NAME_BOX = "Redbox Subtitle Box"
 NAME_TEXT = "Redbox Subtitle"
+NAME_IMAGE = "Redbox Overlay Image"
+TEXT_NAMES = (NAME_TEXT, NAME_BOX)
 POLL_SECONDS = 0.5
 DEFAULTS = {"anchor": "bottom", "width": 0.7, "size": 0.04, "opacity": 0.6}
 ANCHORS = ("bottom", "top", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right")
@@ -148,7 +150,7 @@ class Overlay:
         try:
             self.client = self.connect()
             self.scene = scene
-            remove_leftovers(self.client)
+            remove_leftovers(self.client, TEXT_NAMES)
             v = self.client.get_video_settings()
             self.canvas = (v.base_width, v.base_height)
             self.ids["box"] = self.client.create_input(
@@ -250,7 +252,7 @@ class Overlay:
             self._thread.join(2)
         if self.client:
             try:
-                remove_leftovers(self.client)
+                remove_leftovers(self.client, TEXT_NAMES)
             except Exception as e:
                 self.log(f"  [자막] 치우기 실패: {e}")
             try:
@@ -260,9 +262,119 @@ class Overlay:
         self.client = None
 
 
-def remove_leftovers(client):
-    """앞선 녹화에서 남은 자막 소스(앱이 꺼지거나 PC 가 꺼져 못 치운 것)를 치운다."""
+class ImageOverlay:
+    """녹화 하나 동안 바깥 프로그램이 고쳐 쓰는 투명 PNG 를 게임 화면 위에 통째로 겹친다.
+    그림은 게임 캡처와 같은 자리, 같은 크기로 맞춰 그림 속 자리가 게임 화면의 자리와 맞게 한다(그림 비율은 게임 화면과 같게).
+    자기 OBS 연결과 스레드로 파일이 바뀌면 바로 다시 읽게 하고, 게임 화면 크기가 바뀌면 따라 맞춘다."""
+    FIT_SECONDS = 1.0
+
+    def __init__(self, path, connect, log):
+        self.path, self.connect, self.log = path, connect, log
+        self.client = None
+        self.scene = self.capture = None
+        self.item = self.cap_item = None
+        self._stop = threading.Event()
+        self._thread = None
+        self._seen = None
+        self._fitted = None
+
+    def start(self, scene, capture):
+        """scene 의 게임 캡처(capture) 위에 그림 소스를 얹는다. 실패하면 로그만 남기고 녹화는 그대로."""
+        try:
+            self.client = self.connect()
+            self.scene, self.capture = scene, capture
+            remove_leftovers(self.client, (NAME_IMAGE,))
+            v = self.client.get_video_settings()
+            self.canvas = (v.base_width, v.base_height)
+            self.item = self.client.create_input(scene, NAME_IMAGE, "image_source",
+                                                 {"file": self.path, "unload": False, "linear_alpha": False},
+                                                 True).scene_item_id
+            try:
+                self.cap_item = self.client.get_scene_item_id(scene, capture).scene_item_id if capture else None
+            except Exception:
+                self.cap_item = None           # 게임 캡처가 이 장면에 바로 있지 않으면 장면 전체에 맞춘다
+            self._seen = self._mark()
+            self._fit()
+        except Exception as e:
+            self.log(f"  [그림] 얹기 실패: {e}")
+            self.stop()
+            return False
+        self._thread = threading.Thread(target=self._run, daemon=True, name="overlay-image")
+        self._thread.start()
+        self.log(f"  [그림] 파일 지켜보기: {self.path}")
+        return True
+
+    def _mark(self):
+        try:
+            st = os.stat(self.path)
+            return st.st_mtime_ns, st.st_size
+        except OSError:
+            return None
+
+    def _run(self):
+        failed, next_fit = False, 0
+        while not self._stop.wait(POLL_SECONDS):
+            try:
+                mark = self._mark()
+                if mark != self._seen:         # 바뀌거나 생기면 OBS 가 바로 다시 읽게(스스로는 1초 남짓 늦다)
+                    self._seen = mark
+                    self.client.set_input_settings(NAME_IMAGE, {"file": self.path}, True)
+                if time.time() >= next_fit:
+                    next_fit = time.time() + self.FIT_SECONDS
+                    self._fit()
+                failed = False
+            except Exception as e:
+                if not failed:
+                    self.log(f"  [그림] 고치기 실패: {e}")
+                failed = True
+
+    def _target(self):
+        """그림을 놓을 자리: 게임 캡처의 배치를 그대로(바깥 틀이 있으면 그 틀과 맞춤 방식, 없으면 보이는 크기로 늘림)."""
+        full = {"positionX": 0.0, "positionY": 0.0, "rotation": 0.0, "alignment": 5, "scaleX": 1.0, "scaleY": 1.0,
+                "boundsType": "OBS_BOUNDS_SCALE_INNER", "boundsAlignment": 0,
+                "boundsWidth": float(self.canvas[0]), "boundsHeight": float(self.canvas[1])}
+        if self.cap_item is None:
+            return full
+        t = self.client.get_scene_item_transform(self.scene, self.cap_item).scene_item_transform
+        out = {k: t[k] for k in ("positionX", "positionY", "rotation", "alignment")}
+        out.update(scaleX=1.0, scaleY=1.0, boundsAlignment=t.get("boundsAlignment", 0))
+        if t.get("boundsType") and t["boundsType"] != "OBS_BOUNDS_NONE" and t["boundsWidth"] >= 1:
+            out.update(boundsType=t["boundsType"], boundsWidth=t["boundsWidth"], boundsHeight=t["boundsHeight"])
+            return out
+        w = (t["sourceWidth"] - t.get("cropLeft", 0) - t.get("cropRight", 0)) * t["scaleX"]
+        h = (t["sourceHeight"] - t.get("cropTop", 0) - t.get("cropBottom", 0)) * t["scaleY"]
+        if abs(w) < 1 or abs(h) < 1:
+            return None                       # 게임 화면이 아직 안 잡힘: 다음에 다시
+        out.update(boundsType="OBS_BOUNDS_STRETCH", boundsWidth=abs(w), boundsHeight=abs(h))
+        return out
+
+    def _fit(self):
+        tgt = self._target()
+        if tgt is None or tgt == self._fitted:
+            return
+        self.client.set_scene_item_transform(self.scene, self.item, tgt)
+        self._fitted = tgt
+
+    def stop(self):
+        """지켜보기를 멈추고 얹은 소스를 치운다."""
+        self._stop.set()
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join(2)
+        if self.client:
+            try:
+                remove_leftovers(self.client, (NAME_IMAGE,))
+            except Exception as e:
+                self.log(f"  [그림] 치우기 실패: {e}")
+            try:
+                self.client.disconnect()
+            except Exception:
+                pass
+        self.client = None
+
+
+def remove_leftovers(client, names_to_remove=(NAME_TEXT, NAME_BOX, NAME_IMAGE)):
+    """앞선 녹화에서 남은 자막, 그림 소스(앱이 꺼지거나 PC 가 꺼져 못 치운 것)를 치운다."""
     names = {i["inputName"] for i in client.get_input_list().inputs}
-    for n in (NAME_TEXT, NAME_BOX):
+    for n in names_to_remove:
         if n in names:
             client.remove_input(n)

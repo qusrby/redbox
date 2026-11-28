@@ -56,17 +56,23 @@ class SettingsPage(QScrollArea):
                                       button(tr("set.change"), self._pick_folder, icon_name="folder"))
         autodel = spin(up.get("auto_delete_minutes"), 0, 60, tr("unit.min_le"), tr("unit.off"))
         autodel.valueChanged.connect(lambda val: self._set_up("auto_delete_minutes", val))
-        sub = QWidget()
-        sl = QHBoxLayout(sub)
-        sl.setContentsMargins(0, 0, 0, 0)
-        sl.setSpacing(8)
-        self.sub_clear = button(tr("set.subtitle.clear"), self._clear_subtitle)
-        sl.addWidget(self.sub_clear)
-        sl.addWidget(button(tr("set.subtitle.pick"), self._pick_subtitle, icon_name="folder"))
-        self.sub_row = setting_row(tr("set.subtitle"), rec.get("subtitle_file") or tr("set.subtitle.off"), sub)
-        self.sub_clear.setVisible(bool(rec.get("subtitle_file")))
-        v.addLayout(section(tr("set.recording"), [
-            self.folder_row, setting_row(tr("set.autodel"), tr("set.autodel.desc"), autodel), self.sub_row]))
+        self.file_rows = {}            # 설정 키 -> (줄, 끄기 단추)
+        rows = [self.folder_row, setting_row(tr("set.autodel"), tr("set.autodel.desc"), autodel)]
+        for key, title, filt in (("subtitle_file", "set.subtitle", "set.subtitle.filter"),
+                                 ("overlay_image", "set.overlay", "set.overlay.filter")):
+            box = QWidget()
+            bl = QHBoxLayout(box)
+            bl.setContentsMargins(0, 0, 0, 0)
+            bl.setSpacing(8)
+            clear = button(tr("set.subtitle.clear"), lambda _c=False, k=key: self._set_file(k, ""))
+            bl.addWidget(clear)
+            bl.addWidget(button(tr("set.subtitle.pick"), lambda _c=False, k=key, t=title, f=filt: self._pick_file(k, t, f),
+                                icon_name="folder"))
+            row = setting_row(tr(title), rec.get(key) or tr("set.subtitle.off"), box)
+            clear.setVisible(bool(rec.get(key)))
+            self.file_rows[key] = (row, clear)
+            rows.append(row)
+        v.addLayout(section(tr("set.recording"), rows))
 
         # 오디오
         obs = self.cfg["obs"]
@@ -168,24 +174,23 @@ class SettingsPage(QScrollArea):
                 desc.setText(self.cfg["recording"]["video_root"])
             self._saved()
 
-    def _set_subtitle(self, path):
-        self.cfg["recording"]["subtitle_file"] = path
-        desc = self.sub_row.findChild(QLabel, "rowdesc")
+    def _set_file(self, key, path):
+        """녹화에 얹을 자막 파일, 그림 파일 정하기(빈 값이면 끔)."""
+        self.cfg["recording"][key] = path
+        row, clear = self.file_rows[key]
+        desc = row.findChild(QLabel, "rowdesc")
         if desc:
             desc.setText(path or tr("set.subtitle.off"))
-        self.sub_clear.setVisible(bool(path))
+        clear.setVisible(bool(path))
         self._saved()
 
-    def _pick_subtitle(self):
-        """자막 파일 고르기. 바깥 프로그램이 아직 만들지 않은 파일도 이름을 적어 정할 수 있게 저장 창으로 연다."""
-        cur = self.cfg["recording"].get("subtitle_file") or ""
-        f, _ = QFileDialog.getSaveFileName(self, tr("set.subtitle"), cur, tr("set.subtitle.filter"),
+    def _pick_file(self, key, title, filt):
+        """파일 고르기. 바깥 프로그램이 아직 만들지 않은 파일도 이름을 적어 정할 수 있게 저장 창으로 연다."""
+        cur = self.cfg["recording"].get(key) or ""
+        f, _ = QFileDialog.getSaveFileName(self, tr(title), cur, tr(filt),
                                            options=QFileDialog.Option.DontConfirmOverwrite)
         if f:
-            self._set_subtitle(os.path.normpath(f))
-
-    def _clear_subtitle(self):
-        self._set_subtitle("")
+            self._set_file(key, os.path.normpath(f))
 
     # -- 유튜브 로그인 ---------------------------------------------------------------------------------
     def _signed_in(self):

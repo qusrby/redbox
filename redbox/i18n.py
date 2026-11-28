@@ -237,6 +237,8 @@ T = {
     "set.subtitle.pick": ("선택", "Choose"),
     "set.subtitle.clear": ("끄기", "Turn off"),
     "set.subtitle.filter": ("자막 파일 (*.json *.txt);;모든 파일 (*)", "Subtitle file (*.json *.txt);;All files (*)"),
+    "set.overlay": ("그림 파일", "Overlay image"),
+    "set.overlay.filter": ("PNG 그림 (*.png)", "PNG image (*.png)"),
     "set.upload": ("유튜브 업로드", "YouTube upload"),
     "set.upload.on": ("업로드 사용", "Upload"),
     "set.privacy": ("공개 범위", "Visibility"),
