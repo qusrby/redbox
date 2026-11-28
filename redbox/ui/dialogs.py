@@ -80,12 +80,12 @@ class StopRecordingDialog(_Dialog):
 class RulesDialog(_Dialog):
     """게임 하나의 업로드 규칙(업로드 최소 길이, 자동 삭제 길이, 업로드 뒤 녹화본 삭제 시점)."""
     FIELDS = (("min_minutes", "set.min", 0, 600, 1), ("auto_delete_minutes", "set.autodel", 0, 60, 1),
-              ("keep_days", "set.keep", 0, 365, 2))
+              ("keep_minutes", "set.keep", 0, 0, 2))
 
     def __init__(self, parent, cfg, game):
         super().__init__(parent, tr("rules.title").format(g=game))
         self.cfg, self.game = cfg, game
-        self.setMinimumWidth(640)
+        self.setMinimumWidth(720)
         self.lay.addWidget(label(tr("rules.note"), "dlgtext", wrap=True))
         over = self._current()
         unit = units()
@@ -98,8 +98,8 @@ class RulesDialog(_Dialog):
         for i, (key, text, lo, hi, u) in enumerate(self.FIELDS):
             base = cfg["upload"].get(key, 0)
             custom = key in over
-            if key == "keep_days":
-                sp = KeepControl(over.get(key, base), tr("unit.day_after"))
+            if key == "keep_minutes":
+                sp = KeepControl(over.get(key, base))
             else:
                 sp = spin(over.get(key, base), lo, hi,
                           {"min_minutes": tr("unit.min_ge"), "auto_delete_minutes": tr("unit.min_le")}.get(key, unit[u]),

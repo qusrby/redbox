@@ -13,7 +13,7 @@ from ..recorder import naming
 from . import icons
 from .dialogs import AddGameDialog, RulesDialog
 from .style import C
-from .widgets import Check, ElideLabel, IconButton, SearchBox, SmoothWheel, Tabs, button, label
+from .widgets import Check, ElideLabel, IconButton, SearchBox, SmoothWheel, Tabs, button, label, span_text
 
 ART_W, ART_H = 120, 56
 ROW_H = 74            # 영상 목록과 같은 줄 높이
@@ -188,8 +188,9 @@ class GamesPage(QWidget):
             parts.append(tr("uprule.min").format(v=over["min_minutes"]))
         if "auto_delete_minutes" in over:
             parts.append(tr("uprule.del").format(v=over["auto_delete_minutes"]))
-        if "keep_days" in over:
-            parts.append(tr("uprule.keep").format(v=over["keep_days"]) if over["keep_days"] else tr("uprule.keep0"))
+        if "keep_minutes" in over:
+            parts.append(tr("uprule.keep").format(v=span_text(over["keep_minutes"])) if over["keep_minutes"]
+                         else tr("uprule.keep0"))
         return ", ".join(parts), True
 
     def edit_rules(self, game):

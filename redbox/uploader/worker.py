@@ -85,8 +85,8 @@ class Uploader(threading.Thread):
                      if k.lower() == (game or "").lower()), {})
         mn = float(over.get("min_minutes", self.up.get("min_minutes", 0)) or 0)
         dl = float(over.get("auto_delete_minutes", self.up.get("auto_delete_minutes", 0)) or 0)
-        keep = float(over.get("keep_days", self.up.get("keep_days", 7)) or 0)
-        return mn * 60, dl * 60, keep * 24
+        keep = float(over.get("keep_minutes", self.up.get("keep_minutes", 7 * 24 * 60)) or 0)
+        return mn * 60, dl * 60, keep / 60
 
     def log_once(self, kind, msg):
         if self._once.get(kind) != msg:

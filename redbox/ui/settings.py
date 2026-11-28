@@ -105,8 +105,8 @@ class SettingsPage(QScrollArea):
             sp = spin(up.get(key), lo, hi, unit)
             sp.valueChanged.connect(lambda val, k=key: self._set_up(k, val))
             rows.append(setting_row(tr(text), tr(text + ".desc"), sp))
-        keep = KeepControl(up.get("keep_days"), tr("unit.day_after"))
-        keep.valueChanged.connect(lambda val: self._set_up("keep_days", val))
+        keep = KeepControl(up.get("keep_minutes"))
+        keep.valueChanged.connect(lambda val: self._set_up("keep_minutes", val))
         rows.append(setting_row(tr("set.keep"), tr("set.keep.desc"), keep))
         v.addLayout(section(tr("set.upload"), rows))
 

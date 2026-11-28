@@ -728,37 +728,60 @@ def spin(value, lo, hi, unit, off_text=None):
     return NumberBox(value, lo, hi, unit, off_text)
 
 
-class KeepControl(QWidget):
-    """업로드 뒤 녹화본 삭제: [바로 | 기간 지정] + 날 수. 값 0 = 바로 삭제."""
-    valueChanged = pyqtSignal(int)
+def split_minutes(minutes):
+    """분 -> (일, 시간, 분)"""
+    m = max(0, int(round(minutes or 0)))
+    return m // 1440, m % 1440 // 60, m % 60
 
-    def __init__(self, days, unit):
+
+def span_text(minutes):
+    """보관 시간 글: 2일 3시간 30분(0 인 칸은 뺀다)."""
+    d, h, m = split_minutes(minutes)
+    parts = [f"{n}{tr(k)}" for n, k in ((d, "unit.day"), (h, "unit.hour"), (m, "unit.min")) if n]
+    return " ".join(parts) or f"0{tr('unit.min')}"
+
+
+class KeepControl(QWidget):
+    """업로드 뒤 녹화본 삭제: [바로 | 기간 지정] + 일, 시간, 분. 값은 분, 0 = 바로 삭제."""
+    valueChanged = pyqtSignal(int)
+    DEFAULT = 7 * 24 * 60
+
+    def __init__(self, minutes):
         super().__init__()
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
-        self.days = spin(days or 7, 1, 365, unit)
-        self.seg_box = segmented([(0, tr("keep.now")), (1, tr("keep.days"))], 0 if not days else 1,
+        self.seg_box = segmented([(0, tr("keep.now")), (1, tr("keep.days"))], 0 if not minutes else 1,
                                  self._mode, stretch=False)
         lay.addWidget(self.seg_box)
-        lay.addWidget(self.days)
-        self.days.setEnabled(bool(days))
-        self.days.valueChanged.connect(lambda _v: self.valueChanged.emit(self.value()))
+        d, h, m = split_minutes(minutes or self.DEFAULT)
+        fm = QFontMetrics(self.font())
+        self.boxes = [NumberBox(n, 0, hi, tr(k), width=max(w, 58 + fm.horizontalAdvance(tr(k).strip())))
+                      for n, hi, k, w in ((d, 365, "unit.day", 84), (h, 23, "unit.hour", 92), (m, 59, "unit.min_after", 104))]
+        for b in self.boxes:
+            lay.addWidget(b)
+            b.setEnabled(bool(minutes))
+            b.valueChanged.connect(lambda _v: self.valueChanged.emit(self.value()))
 
     def _mode(self, keep):
-        self.days.setEnabled(bool(keep))
+        for b in self.boxes:
+            b.setEnabled(bool(keep))
         self.valueChanged.emit(self.value())
 
     def value(self):
-        return self.days.value() if self.days.isEnabled() else 0
+        if not self.boxes[0].isEnabled():
+            return 0
+        d, h, m = (b.value() for b in self.boxes)
+        return d * 1440 + h * 60 + m
 
     def setValue(self, v):
         v = int(v or 0)
         for b in self.seg_box.findChildren(QPushButton):
             b.setChecked((b.text() == tr("keep.days")) == bool(v))
-        self.days.setEnabled(bool(v))
-        if v:
-            self.days.setValue(v)
+        for b, n in zip(self.boxes, split_minutes(v) if v else ()):
+            b.setValue(n)
+        for b in self.boxes:
+            b.setEnabled(bool(v))
 
 
 # -- 설정 줄 --------------------------------------------------------------------------------------

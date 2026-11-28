@@ -37,7 +37,7 @@ DEFAULTS = {
         "min_minutes": 3,               # 이보다 짧으면 올리지 않는다(파일은 남김)
         "auto_delete_minutes": 0,       # 이 길이 이하는 지운다. 0 이면 끔
         "delete_after_upload": True,    # 유튜브 처리가 끝나고 보관 기간이 지나면 PC 에서 지운다
-        "keep_days": 7,                 # 올린 뒤 원본 보관 날 수(그동안 구간 업로드 가능)
+        "keep_minutes": 7 * 24 * 60,    # 올린 뒤 원본 보관 시간(분). 0 이면 바로 지운다
         "stuck_hours": 10,              # 이 시간 넘게 유튜브 처리가 안 끝나면 지우고 다시 올린다
         "game_playlists": True,         # 게임 이름의 비공개 재생목록에 넣는다
         "title_template": "{name}",     # {name} = 파일 이름
@@ -45,7 +45,7 @@ DEFAULTS = {
         "tags": ["gaming"],
         "category": "20",               # 유튜브 카테고리: 20 = 게임
         "poll_seconds": 30,
-        "game_overrides": {},           # 게임 이름 -> {min_minutes, auto_delete_minutes, keep_days}
+        "game_overrides": {},           # 게임 이름 -> {min_minutes, auto_delete_minutes, keep_minutes}
     },
     "obs": {
         "host": "localhost", "port": 4455, "password": "",   # 비밀번호가 비면 OBS 웹소켓 설정 파일에서 읽는다
@@ -71,9 +71,25 @@ def _merge(base, over):
     return out
 
 
+def _keep_minutes(d):
+    """예전 설정의 보관 날 수(keep_days)를 분(keep_minutes)으로 옮긴다."""
+    if isinstance(d, dict) and "keep_days" in d:
+        days = d.pop("keep_days")
+        if "keep_minutes" not in d:
+            try:
+                d["keep_minutes"] = max(0, round(float(days or 0) * 24 * 60))
+            except (TypeError, ValueError):
+                pass
+
+
 def load():
     try:
         raw = safefile.read_json(paths.config_file())
+        up = raw.get("upload") if isinstance(raw, dict) else None
+        if isinstance(up, dict):
+            _keep_minutes(up)
+            for over in (up.get("game_overrides") or {}).values():
+                _keep_minutes(over)
         cfg = _merge(DEFAULTS, raw)
         if "setup_done" not in raw:      # 안내가 생기기 전부터 쓰던 사용자
             cfg["setup_done"] = True
