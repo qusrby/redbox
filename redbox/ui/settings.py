@@ -58,8 +58,7 @@ class SettingsPage(QScrollArea):
         autodel.valueChanged.connect(lambda val: self._set_up("auto_delete_minutes", val))
         self.file_rows = {}            # 설정 키 -> (줄, 끄기 단추)
         rows = [self.folder_row, setting_row(tr("set.autodel"), tr("set.autodel.desc"), autodel)]
-        for key, title, filt in (("subtitle_file", "set.subtitle", "set.subtitle.filter"),
-                                 ("overlay_image", "set.overlay", "set.overlay.filter")):
+        for key, title, filt in (("subtitle_file", "set.subtitle", "set.subtitle.filter"),):
             box = QWidget()
             bl = QHBoxLayout(box)
             bl.setContentsMargins(0, 0, 0, 0)

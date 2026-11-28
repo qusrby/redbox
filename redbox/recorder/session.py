@@ -323,28 +323,20 @@ class Recorder:
         return new
 
     def _start_subtitle(self):
-        """설정에 그림 파일, 자막 파일이 있으면 녹화될 장면에 얹는다(그림 위에 자막). 실패해도 녹화는 그대로 한다."""
-        rec = self.cfg["recording"]
-        image = (rec.get("overlay_image") or "").strip()
-        text = (rec.get("subtitle_file") or "").strip()
-        if not image and not text:
+        """설정에 통합 자막 파일이 있으면 녹화될 장면에 그 파일이 적은 그림과 글을 얹는다. 실패해도 녹화는 그대로 한다."""
+        path = (self.cfg["recording"].get("subtitle_file") or "").strip()
+        if not path:
             return
         from .obs import open_client
-        from .subtitle import ImageOverlay, Overlay
+        from .subtitle import Overlay
         try:
             scene = self.obs.record_scene()
         except Exception as e:
             self.log(f"  [자막] 장면을 못 읽음: {e}")
             return
-        connect = lambda: open_client(self.cfg["obs"])     # noqa: E731
-        if image:
-            ov = ImageOverlay(image, connect, self.log)
-            if ov.start(scene, self.obs.capture):
-                self.subtitle.append(ov)
-        if text:
-            ov = Overlay(text, connect, self.log)
-            if ov.start(scene):
-                self.subtitle.append(ov)
+        ov = Overlay(path, lambda: open_client(self.cfg["obs"]), self.log)
+        if ov.start(scene, self.obs.capture):
+            self.subtitle.append(ov)
 
     def _stop_subtitle(self):
         ovs, self.subtitle = self.subtitle, []

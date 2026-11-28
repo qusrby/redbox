@@ -17,8 +17,7 @@ DEFAULTS = {
         "per_game_folder": True,
         "file_name": "{game} Video {start} {duration}",
         "discard_no_window_seconds": 30,   # 창을 한 번도 못 찾은 채 이 시간 안에 끝난 녹화는 지운다
-        "subtitle_file": "",         # 녹화에 얹을 자막 글 파일(바깥 프로그램이 고쳐 씀). 비면 끔
-        "overlay_image": "",         # 녹화에 겹칠 투명 PNG(바깥 프로그램이 고쳐 씀, 게임 화면과 같은 비율). 비면 끔
+        "subtitle_file": "",         # 녹화에 얹을 통합 자막 파일(JSON, 바깥 프로그램이 고쳐 씀. 그림과 글 칸 목록). 비면 끔
     },
     "detection": {
         "windows_game_list": True,   # 윈도우 GameConfigStore
