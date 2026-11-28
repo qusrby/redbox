@@ -276,6 +276,15 @@ T = {
     "unit.day": ("일", " days"),
     "unit.day_after": ("일 뒤", " days later"),
     "unit.off": ("끔", "Off"),
+    "dash.stop": ("녹화 중지", "Stop recording"),
+    "dash.stopping": ("멈추는 중", "Stopping"),
+    "stop.title": ("녹화 중지", "Stop recording"),
+    "stop.text": ("{game} 녹화를 멈출까요? 게임을 다시 실행할 때까지 이 게임은 자동으로 녹화하지 않습니다. "
+                  "멈춘 곳까지 녹화된 영상은 평소처럼 저장됩니다.",
+                  "Stop recording {game}? This game won't be recorded automatically until you launch it again. "
+                  "The video up to this point is saved as usual."),
+    "stop.ok": ("녹화 중지", "Stop recording"),
+    "stop.cancel": ("취소", "Cancel"),
     "restart.title": ("언어 변경", "Language"),
     "restart.text": ("바꾼 언어는 프로그램을 다시 실행해야 적용됩니다. 지금 다시 실행할까요? 녹화 중이면 녹화를 정상으로 마친 뒤 다시 켜집니다.",
                      "The new language is applied after a restart. Restart now? A recording in progress is finished properly first."),

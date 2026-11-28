@@ -66,6 +66,9 @@ class Hero(QFrame):
         self.action = button("", primary=True)        # OBS Studio 가 꺼져 있을 때만
         self.action.hide()
         bottom.addWidget(self.action, 0, Qt.AlignmentFlag.AlignBottom)
+        self.stop = button(tr("dash.stop"), icon_name="stop")   # 녹화 중일 때만
+        self.stop.hide()
+        bottom.addWidget(self.stop, 0, Qt.AlignmentFlag.AlignBottom)
         v.addLayout(bottom)
 
     def set_game(self, game):
@@ -238,6 +241,31 @@ class DashboardPage(QWidget):
         if getattr(self, "_last", None):
             self.refresh_status(*self._last)
 
+    def _stop_recording(self):
+        """녹화 중지: 알림 창으로 묻고, 멈추면 그 게임을 다시 실행할 때까지 자동 녹화하지 않는다."""
+        s = self.svc.recorder.session
+        if not s:
+            return
+        from .dialogs import StopRecordingDialog
+        if StopRecordingDialog(self, s.game).exec() and self.svc.recorder.session is s:
+            self.svc.recorder.request_stop()
+            self._stopping = s
+            self.svc.log(f"대시보드에서 녹화 중지: {s.game}")
+            if getattr(self, "_last", None):
+                self.refresh_status(*self._last)
+
+    def _stop_button(self, s):
+        b = self.hero.stop
+        if not s:
+            self._stopping = None
+            b.hide()
+            return
+        stopping = getattr(self, "_stopping", None) is s
+        _set(b, tr("dash.stopping") if stopping else tr("dash.stop"))
+        if b.isEnabled() == stopping:
+            b.setEnabled(not stopping)
+        b.show()
+
     def _obs_action(self):
         """녹화 중이 아니고 OBS Studio 가 꺼져 있을 때만 큰 칸에 실행 버튼. 누른 뒤 20초 동안은 켜는 중으로 잠근다."""
         b = self.hero.action
@@ -283,6 +311,7 @@ class DashboardPage(QWidget):
             else:
                 color, state, big, meta = C["ok"], tr("state.ready"), tr("dash.ready.big"), ""
         self._obs_action()
+        self._stop_button(s)
         h.dot.set_color(color)
         _set(h.state, state, f"color: {color};")
         _set(h.big, big)

@@ -23,6 +23,7 @@ PATHS = {
     "list": '<path d="M9 6.5h11M9 12h11M9 17.5h11" {L}/><path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" '
             'fill="none" stroke="{c}" stroke-width="2.6" stroke-linecap="round"/>',
     "play": '<path d="M8 5.5v13l10.5-6.5z" fill="{c}"/>',
+    "stop": '<rect x="6.5" y="6.5" width="11" height="11" fill="{c}"/>',
     "folder": '<path d="M3.5 7.5V18a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1V9.5a1 1 0 0 0-1-1h-8l-2-2.5h-5a1 1 0 0 0-1 1z" {L}/>',
     "external": '<path d="M14 4h6v6M20 4l-8.5 8.5M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" {L}/>',
     "copy": '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="1" {L}/>'

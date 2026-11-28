@@ -55,6 +55,8 @@ class Recorder:
         self.next_sweep = 0
         self.healed_obs = set()       # 비정상 종료 확인 창에서 멈춰 다시 켜 준 OBS pid(한 번만)
         self.subtitle = []            # 녹화에 얹은 그림과 자막(설정에 파일이 있을 때)
+        self.stop_requested = False   # 화면에서 녹화 중지를 눌렀음(다음 확인 때 멈춘다)
+        self.skip_pids = set()        # 직접 멈춘 게임 실행: 그 프로세스가 끝날 때까지 자동 녹화하지 않는다
 
     # -- OBS 연결 ------------------------------------------------------------------------------
     def ensure_connected(self):
@@ -206,6 +208,7 @@ class Recorder:
                 self.log("직접 켠 녹화가 끝남 -> 자동 녹화 다시 시작")
             self.external = False
 
+        self._handle_stop_request()
         if self.session:
             d = decisions.get(self.session.pid)
             if not d or not d.record:
@@ -220,8 +223,27 @@ class Recorder:
                 self.start(cand)
         self._sweep(now)
 
+    def request_stop(self):
+        """화면에서 녹화 중지: 녹화 스레드가 다음 확인(2초 안) 때 멈추고, 그 게임 실행은 다시 녹화하지 않는다."""
+        self.stop_requested = True
+
+    def _handle_stop_request(self):
+        if not self.stop_requested:
+            return
+        self.stop_requested = False
+        s = self.session
+        if not s:
+            return
+        self.skip_pids.add(s.pid)
+        self.log(f"녹화 직접 중지: {s.game} -> 게임을 다시 실행할 때까지 자동 녹화 안 함")
+        self.stop()
+
     def _pick(self, decisions, now):
-        cands = [d for d in decisions.values() if d.record and now >= self.retry_after.get(d.path.lower(), 0)]
+        if self.skip_pids:                 # 끝난 게임 실행은 잊는다(다시 실행하면 새 pid)
+            import psutil
+            self.skip_pids = {p for p in self.skip_pids if psutil.pid_exists(p)}
+        cands = [d for d in decisions.values() if d.record and d.pid not in self.skip_pids
+                 and now >= self.retry_after.get(d.path.lower(), 0)]
         if not cands:
             return None
         wins = win32.visible_windows()

@@ -66,6 +66,16 @@ class RestartDialog(_Dialog):
         self.buttons((tr("restart.later"), self.reject, False), (tr("restart.now"), self.accept, True))
 
 
+class StopRecordingDialog(_Dialog):
+    """대시보드의 녹화 중지: 멈추면 그 게임을 다시 실행할 때까지 자동 녹화하지 않는다는 것을 알리고 묻는다."""
+
+    def __init__(self, parent, game):
+        super().__init__(parent, tr("stop.title"))
+        self.setMinimumWidth(420)
+        self.lay.addWidget(label(tr("stop.text").format(game=game), "dlgtext", wrap=True))
+        self.buttons((tr("stop.cancel"), self.reject, False), (tr("stop.ok"), self.accept, True))
+
+
 class RulesDialog(_Dialog):
     """게임 하나의 업로드 규칙(업로드 최소 길이, 자동 삭제 길이, 업로드 뒤 녹화본 삭제 시점)."""
     FIELDS = (("min_minutes", "set.min", 0, 600, 1), ("auto_delete_minutes", "set.autodel", 0, 60, 1),
