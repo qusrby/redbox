@@ -2,7 +2,7 @@
 
 APP_NAME = "Redbox"
 APP_ID = "Redbox"
-VERSION = "1.0.4"         # 주.부.수정. 릴리스 태그(v1.0.4)와 설치 파일 이름에 쓴다
+VERSION = "1.0.5"         # 주.부.수정. 릴리스 태그(v1.0.5)와 설치 파일 이름에 쓴다
 
 
 def _build_number():

@@ -3,7 +3,7 @@
 ; 설정과 기록(%APPDATA%\Redbox)은 지우지 않는다(다시 설치해도 이어서 쓰도록).
 
 #ifndef AppVersion
-  #define AppVersion "1.0.4"
+  #define AppVersion "1.0.5"
 #endif
 #ifndef SetupVersion
   #define SetupVersion AppVersion
